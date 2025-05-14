@@ -1,0 +1,46 @@
+const express = require('express');
+const MercadoPago = require('mercadopago');
+const cors = require('cors');
+// Crear instancia de MercadoPago con el access token
+const mercadopago = new MercadoPago.MercadoPagoConfig({
+  accessToken: 'TEST-8894316476633004-051407-39519fd2568cadb3d3629ea2c47baeec-179271995',
+});
+
+const preference = new MercadoPago.Preference(mercadopago);
+
+const app = express();
+app.use(express.json());
+// ✅ Habilitar CORS para aceptar solicitudes del frontend
+app.use(cors());
+app.post('/api/crear-preferencia', async (req, res) => {
+  try {
+    const { plan } = req.body;
+ if (!plan) {
+      return res.status(400).send('Plan no proporcionado');
+    }
+     console.log(plan);
+
+    const result = await preference.create({
+      body: {
+        items: [
+          {
+            title: plan.nombre, // Se espera que 'plan' tenga el atributo 'nombre'
+            quantity: 1,
+            currency_id: 'ARS',
+            unit_price: plan.precio // Se espera que 'plan' tenga el atributo 'precio'
+          }
+        ]
+      }
+    });
+    
+    res.json({ preferenceId: result.id });
+  } catch (error) {
+    console.error('Error al crear preferencia:', error);
+    res.status(500).send('Error al crear preferencia');
+  }
+});
+
+
+app.listen(3000, () => {
+  console.log('Servidor backend escuchando en http://localhost:3000');
+});
