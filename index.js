@@ -35,7 +35,7 @@ app.post('/api/crear-preferencia', async (req, res) => {
             unit_price: plan.precio
           }
         ],
-        external_reference: 'webpage-client::' + origen
+        external_reference: `webpage-client::${origen}`
       }
     });
 
@@ -46,41 +46,65 @@ app.post('/api/crear-preferencia', async (req, res) => {
   }
 });
 
-// Obtener ventas
 app.get('/api/ventas', async (req, res) => {
   try {
     const result = await payment.search({
-      query: {
-        external_reference: 'webpage-client::',
-        status: 'approved'
+      options: {
+        status: 'approved',
+        sort: 'date_created',
+        criteria: 'desc',
+        limit: 50
       }
     });
 
-    const ventasDesdeWeb = result.results.filter(p => {
-      return (
-        p.external_reference &&
-        p.external_reference.startsWith('webpage-client::') &&
-        p.status === 'approved'
-      );
+    console.log("Últimos 5 pagos (referencias):", 
+      (result.results?.slice(0, 5) || []).map(p => ({
+        id: p.id,
+        ref: p.external_reference,
+        tipo: p.payment_type_id
+      }))
+    );
+
+    const ventasFiltradas = (result.results || []).filter(p => {
+      
+      const tieneReferencia = p.external_reference?.includes('webpage-client');
+      const esTipoValido = ['credit_card', 'debit_card', 'account_money'].includes(p.payment_type_id);
+
+      if (!tieneReferencia && esTipoValido) {
+        
+        console.warn(`Pago sin referencia válida (ID: ${p.id})`, {
+          referencia: p.external_reference,
+          tipo: p.payment_type_id
+        });
+      }
+
+      return tieneReferencia && esTipoValido;
     });
 
-    const ventasFormateadas = ventasDesdeWeb.map(p => ({
+    const ventasFormateadas = ventasFiltradas.map(p => ({
       id: p.id,
-      fecha: p.date_created,
-      plan: p.description || 'Sin descripción',
-      monto: p.transaction_amount,
-      metodo: p.payment_method_id,
-      estado: p.status,
-      cliente: p.external_reference.replace('webpage-client::', '')
+  fecha: p.date_created,  // enviar sin formatear, frontend formatea
+  monto: p.transaction_amount,
+  metodo: p.payment_method_id, // o mapeado a nombre legible
+  plan: p.additional_info?.items?.[0]?.title || p.description || 'Venta no identificada',
+  referencia: p.external_reference,
+  estado: p.status || 'desconocido',
+  cliente: p.payer?.email,
     }));
 
+    console.log(`✅ Pagos filtrados: ${ventasFormateadas.length}`);
     res.json(ventasFormateadas);
+
   } catch (error) {
-    console.error('Error al obtener ventas:', error);
-    res.status(500).send('Error al obtener ventas');
+    console.error("❌ Error al obtener ventas:", {
+      message: error.message,
+      code: error.code,
+      data: error.response?.data
+    });
+    res.status(500).json({ error: "Error al obtener ventas" });
   }
 });
 
-app.listen(3000, () => {
+  app.listen(3000, () => {
   console.log('Servidor backend escuchando en http://localhost:3000');
 });
