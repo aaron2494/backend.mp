@@ -3,7 +3,7 @@ const MercadoPago = require('mercadopago');
 const cors = require('cors');
 // Crear instancia de MercadoPago con el access token
 const mercadopago = new MercadoPago.MercadoPagoConfig({
-  accessToken: 'TEST-8894316476633004-051407-39519fd2568cadb3d3629ea2c47baeec-179271995',
+  accessToken: 'APP_USR-8894316476633004-051407-6244e92db1c8beb7e8212b575fe08641-179271995',
 });
 
 const preference = new MercadoPago.Preference(mercadopago);
