@@ -39,7 +39,30 @@ app.post('/api/crear-preferencia', async (req, res) => {
     res.status(500).send('Error al crear preferencia');
   }
 });
+app.get('/api/ventas', async (req, res) => {
+  try {
+    const searchResult = await mercadopago.payment.search({
+      qs: {
+        sort: 'date_created',
+        criteria: 'desc'
+      }
+    });
 
+    const ventas = searchResult.body.results.map((pago) => ({
+      id: pago.id,
+      fecha: pago.date_created,
+      plan: pago.description || pago.additional_info?.items?.[0]?.title || 'Desconocido',
+      estado: pago.status,
+      monto: pago.transaction_amount,
+      metodo: pago.payment_method_id
+    }));
+
+    res.json(ventas);
+  } catch (error) {
+    console.error('Error al obtener ventas:', error);
+    res.status(500).send('Error al obtener ventas');
+  }
+});
 
 app.listen(3000, () => {
   console.log('Servidor backend escuchando en http://localhost:3000');
