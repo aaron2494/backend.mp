@@ -137,15 +137,12 @@ app.post('/api/webhook', async (req, res) => {
       // Asegurarte que está aprobado
       if (info.status === 'approved') {
         const email = info.payer?.email;
-        const plan = info.additional_info?.items?.[0]?.title || info.description;
+        const planComprado = info.additional_info?.items?.[0]?.title || 'Desconocido';
 
-        // Acá enviás el email al cliente
         await enviarEmailAlCliente({
           to: email,
-          subject: 'Gracias por tu compra',
-          text: `Hola, gracias por tu compra. Detalles del plan: ${plan}. Monto: $${info.transaction_amount}.`
+          plan: planComprado
         });
-
         console.log(`✉️ Email enviado a ${email}`);
       }
     }
@@ -164,12 +161,49 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-async function enviarEmailAlCliente({ to, subject, text }) {
+async function enviarEmailAlCliente({ to, plan }) {
+  const planes = {
+    'Básico': {
+      descripcion: 'Ideal para pequeñas y medianas empresas que buscan optimizar sus procesos de manera eficiente. Incluye herramientas esenciales para el manejo de tu negocio, con soporte técnico básico. Perfecto para quienes están comenzando a dar sus primeros pasos en el mundo digital.',
+      precio: 1
+    },
+    'Profesional': {
+      descripcion: 'Solución avanzada para empresas que necesitan herramientas potentes para crecer y gestionar operaciones de mayor escala. Con acceso a funciones premium y soporte técnico prioritario, este plan está diseñado para optimizar la productividad y ofrecer soluciones personalizadas.',
+      precio: 2
+    },
+    'Premium': {
+      descripcion: 'Automatización total para empresas grandes y proyectos ambiciosos. Incluye las funcionalidades del plan Profesional y herramientas avanzadas de análisis, seguridad y gestión. Acceso a soporte personalizado 24/7, optimización de procesos a medida y características avanzadas para maximizar la eficiencia.',
+      precio: 3
+    }
+  };
+
+  const info = planes[plan] || {
+    descripcion: 'Gracias por adquirir uno de nuestros servicios.',
+    precio: 0
+  };
+
+  const htmlContent = `
+    <div style="font-family: 'Segoe UI', sans-serif; color: #333; padding: 20px; line-height: 1.6;">
+      <h2 style="color: #2c3e50;">🎉 ¡Gracias por tu compra!</h2>
+      <p>Hola,</p>
+      <p>Te agradecemos por confiar en <strong>Innovatexx</strong>. Has adquirido el plan <strong>${plan}</strong>, una excelente elección para potenciar tu negocio.</p>
+      <div style="border-left: 4px solid #3498db; padding-left: 15px; margin: 20px 0;">
+        <h3 style="margin-bottom: 5px;">📦 Plan ${plan}</h3>
+        <p style="margin: 0;"><em>${info.descripcion}</em></p>
+        <p style="margin-top: 10px;"><strong>Precio abonado:</strong> $${info.precio} ARS</p>
+      </div>
+      <p>En breve nos pondremos en contacto contigo para comenzar con el proceso de implementación.</p>
+      <p style="margin-top: 30px;">Saludos cordiales,<br><strong>El equipo de Innovatexx</strong></p>
+      <hr style="margin-top: 40px; border: none; border-top: 1px solid #ccc;" />
+      <p style="font-size: 12px; color: #777;">Este mensaje fue enviado automáticamente. Si tienes alguna duda, no dudes en escribirnos a contacto@innovatexx.com</p>
+    </div>
+  `;
+
   await transporter.sendMail({
-    from: 'Tu Empresa <aaron.e.francolino@gmail.com>',
+    from: 'Innovatexx <tuemail@gmail.com>',
     to,
-    subject,
-    text
+    subject: `🧾 Confirmación de compra: Plan ${plan}`,
+    html: htmlContent
   });
 }
 
