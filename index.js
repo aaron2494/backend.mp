@@ -120,6 +120,10 @@ app.get('/api/ventas', async (req, res) => {
   }
 });
 
+app.post('/api/webhook', async (req, res) => {
+  console.log('📩 Webhook recibido:', JSON.stringify(req.body, null, 2));
+  const paymentId = req.body?.data?.id; 
+ }) 
 
 
   app.listen(3000, () => {
