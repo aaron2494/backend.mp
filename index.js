@@ -123,41 +123,39 @@ app.get('/api/ventas', async (req, res) => {
 });
 
 app.post('/api/webhook', async (req, res) => {
-  const data = req.body;
+   const data = req.body;
+
+  console.log('📨 Webhook recibido:', JSON.stringify(data, null, 2));
 
   try {
-    // Verificás si es una notificación de pago aprobado
     if (data.type === 'payment') {
       const paymentId = data.data.id;
+      console.log('💳 Buscando detalles del pago ID:', paymentId);
 
       const paymentDetails = await payment.get({ id: paymentId });
-
       const info = paymentDetails.body;
 
-      // Asegurarte que está aprobado
+      console.log('ℹ️ Detalles del pago:', info);
+
       if (info.status === 'approved') {
         const email = info.payer?.email;
         const planComprado = info.additional_info?.items?.[0]?.title || 'Desconocido';
+        console.log('✅ Pago aprobado. Enviando mail a:', email, 'Plan:', planComprado);
 
         await enviarEmailAlCliente({
           to: email,
           plan: planComprado
         });
         console.log(`✉️ Email enviado a ${email}`);
+      } else {
+        console.log('⚠️ El pago no está aprobado. Estado:', info.status);
       }
     }
 
     res.status(200).send('OK');
   } catch (err) {
-    console.error('❌ Error en webhook:', err);
+    console.error('❌ Error en webhook:', err.message || err);
     res.status(500).send('Error procesando webhook');
-  }
-});
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: 'aaron.e.francolino@gmail.com',
-    pass: 'levt tpwt zqsv hkoc'
   }
 });
 
