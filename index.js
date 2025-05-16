@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const MercadoPago = require('mercadopago');
-
+const nodemailer = require('nodemailer');
 // SDK v2
 const { MercadoPagoConfig, Preference, Payment } = MercadoPago;
 
@@ -11,23 +11,37 @@ const mercadopago = new MercadoPagoConfig({
 
 const preference = new Preference(mercadopago);
 const payment = new Payment(mercadopago);
-
+// Configuración del transporter de email
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: 'aaron.e.francolino@gmail.com',
+    pass: 'levt tpwt zqsv hkoc'
+  }
+});
 const app = express();
-
-// Configuración CORS
+// 1. Configuración CORS debe ir PRIMERO
 const corsOptions = {
   origin: [
     'https://innovatexx.netlify.app',
     'http://localhost:4200'
   ],
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 };
 
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
-app.use(express.json());
+app.use(cors(corsOptions)); // CORS primero
 
+app.use(express.json());
+// 3. Verificar conexión SMTP al iniciar
+transporter.verify((error) => {
+  if (error) {
+    console.error('❌ Error SMTP:', error);
+  } else {
+    console.log('✅ SMTP configurado correctamente');
+  }
+});
 
 // Crear preferencia
 app.post('/api/crear-preferencia', async (req, res) => {
@@ -48,10 +62,7 @@ app.post('/api/crear-preferencia', async (req, res) => {
             unit_price: plan.precio
           }
         ],
-        external_reference: `webpage-client::${origen}`,
-        back_urls: {
-        success:'https://innovatexx.netlify.app/pago-exitoso',
-      },
+        external_reference: `webpage-client::${origen}`
       }
     });
 
@@ -121,62 +132,55 @@ app.get('/api/ventas', async (req, res) => {
   }
 });
 
+// 4. Webhook mejorado
 app.post('/api/webhook', async (req, res) => {
-  res.sendStatus(200); // 👈 Respondé rápido
-
-  const paymentId = req.body?.data?.id;
-  if (req.body.type !== 'payment') return;
-
   try {
-    const pago = await payment.get({ id: paymentId });
+    // Respuesta inmediata para MP
+    res.sendStatus(200);
+    
+    // Procesamiento asíncrono
+    const paymentId = req.body?.data?.id;
+    if (!paymentId || req.body.type !== 'payment') return;
 
+    const pago = await payment.get({ id: paymentId });
+    
     if (pago.status === 'approved') {
       const email = pago.payer?.email;
       const plan = pago.additional_info?.items?.[0]?.title || 'Sin plan';
-      await enviarEmailAlCliente(email, plan, pago.id);
-      console.log(`📧 Email enviado a ${email}`);
+      
+      if (email) {
+        await enviarEmailAlCliente(email, plan, pago.id);
+      }
     }
   } catch (error) {
     console.error('❌ Error en webhook:', error);
   }
 });
 
+// 5. Función de email con mejor manejo de errores
+async function enviarEmailAlCliente(email, plan, idPago) {
+  try {
+    const mailOptions = {
+      from: 'InnovateXX <aaron.e.francolino@gmail.com>',
+      to: email,
+      subject: 'Confirmación de compra',
+      html: `
+        <h2>¡Gracias por tu compra en InnovateXX!</h2>
+        <p>Detalles de tu transacción:</p>
+        <ul>
+          <li><strong>Plan:</strong> ${plan}</li>
+          <li><strong>ID de transacción:</strong> ${idPago}</li>
+        </ul>
+      `
+    };
 
-
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`📧 Email enviado a ${email} (ID: ${info.messageId})`);
+  } catch (error) {
+    console.error(`❌ Fallo al enviar email a ${email}:`, error);
+  }
+}
 
   app.listen(3000, () => {
   console.log('Servidor backend escuchando en http://localhost:3000');
-  
 });
-
-const nodemailer = require('nodemailer');
-
-async function enviarEmailAlCliente(email, plan, idPago) {
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: 'aaron.e.francolino@gmail.com',
-      pass: 'levt tpwt zqsv hkoc' // ⚠️ Este es un token de app, no tu contraseña real, bien ahí.
-    }
-  });
-
-  const mailOptions = {
-    from: 'aaron.e.francolino@gmail.com',
-    to: email,
-    subject: 'Gracias por tu compra',
-    html: `
-      <h2>¡Gracias por tu compra!</h2>
-      <p>Tu pago fue aprobado correctamente.</p>
-      <p><strong>Plan:</strong> ${plan}</p>
-      <p><strong>ID de pago:</strong> ${idPago}</p>
-    `
-  };
-
-  try {
-    await transporter.sendMail(mailOptions);
-    console.log(`✅ Correo enviado a ${email}`);
-  } catch (error) {
-    console.error(`❌ Error al enviar el correo a ${email}:`, error);
-  }
-}
-module.exports = app;
