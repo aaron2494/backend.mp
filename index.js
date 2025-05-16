@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const MercadoPago = require('mercadopago');
 
-const nodemailer = require('nodemailer');
 // SDK v2
 const { MercadoPagoConfig, Preference, Payment } = MercadoPago;
 
@@ -13,23 +12,9 @@ const mercadopago = new MercadoPagoConfig({
 const preference = new Preference(mercadopago);
 const payment = new Payment(mercadopago);
 
-const corsOptions = {
-  origin: [
-    'https://innovatexx.netlify.app',
-    'http://localhost:4200'
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: true,
-  optionsSuccessStatus: 200
-};
-
 const app = express();
-
-// Middlewares
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Habilitar preflight para todas las rutas
 app.use(express.json());
+app.use(cors());
 
 // Crear preferencia
 app.post('/api/crear-preferencia', async (req, res) => {
@@ -51,7 +36,7 @@ app.post('/api/crear-preferencia', async (req, res) => {
           }
         ],
         external_reference: `webpage-client::${origen}`,
-    back_urls: {
+         back_urls: {
       success: 'https://innovatexx.netlify.app/pago-exitoso',
       failure: 'https://innovatexx.netlify.app/pago-fallido',
       pending: 'https://innovatexx.netlify.app/pago-pendiente'
