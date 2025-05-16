@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const MercadoPago = require('mercadopago');
-const nodemailer = require('nodemailer');
 // SDK v2
 const { MercadoPagoConfig, Preference, Payment } = MercadoPago;
 
@@ -12,13 +11,6 @@ const mercadopago = new MercadoPagoConfig({
 const preference = new Preference(mercadopago);
 const payment = new Payment(mercadopago);
 // Configuración del transporter de email
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: 'aaron.e.francolino@gmail.com',
-    pass: 'levt tpwt zqsv hkoc'
-  }
-});
 const app = express();
 // 1. Configuración CORS debe ir PRIMERO
 const corsOptions = {
@@ -34,14 +26,7 @@ const corsOptions = {
 app.use(cors(corsOptions)); // CORS primero
 
 app.use(express.json());
-// 3. Verificar conexión SMTP al iniciar
-transporter.verify((error) => {
-  if (error) {
-    console.error('❌ Error SMTP:', error);
-  } else {
-    console.log('✅ SMTP configurado correctamente');
-  }
-});
+
 
 // Crear preferencia
 app.post('/api/crear-preferencia', async (req, res) => {
@@ -62,7 +47,8 @@ app.post('/api/crear-preferencia', async (req, res) => {
             unit_price: plan.precio
           }
         ],
-        external_reference: `webpage-client::${origen}`,back_urls: {
+        external_reference: `webpage-client::${origen}`,
+        back_urls: {
       success: 'https://innovatexx.netlify.app/pago-exitoso',
     },
     auto_return: 'approved'
