@@ -171,6 +171,6 @@ async function enviarEmailAlCliente(email, plan, idPago) {
 }
 
 
-  app.listen(3000, () => {
-  console.log('Servidor backend escuchando en http://localhost:3000');
-});
+
+  module.exports = app;
+
