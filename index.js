@@ -142,8 +142,40 @@ app.post('/api/webhook', async (req, res) => {
 
 
 
+
   app.listen(3000, () => {
   console.log('Servidor backend escuchando en http://localhost:3000');
   
 });
+
+const nodemailer = require('nodemailer');
+
+async function enviarEmailAlCliente(email, plan, idPago) {
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: 'aaron.e.francolino@gmail.com',
+      pass: 'levt tpwt zqsv hkoc' // ⚠️ Este es un token de app, no tu contraseña real, bien ahí.
+    }
+  });
+
+  const mailOptions = {
+    from: 'aaron.e.francolino@gmail.com',
+    to: email,
+    subject: 'Gracias por tu compra',
+    html: `
+      <h2>¡Gracias por tu compra!</h2>
+      <p>Tu pago fue aprobado correctamente.</p>
+      <p><strong>Plan:</strong> ${plan}</p>
+      <p><strong>ID de pago:</strong> ${idPago}</p>
+    `
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Correo enviado a ${email}`);
+  } catch (error) {
+    console.error(`❌ Error al enviar el correo a ${email}:`, error);
+  }
+}
 module.exports = app;
