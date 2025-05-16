@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const MercadoPago = require('mercadopago');
+const nodemailer = require('nodemailer');
 // SDK v2
 const { MercadoPagoConfig, Preference, Payment } = MercadoPago;
 
@@ -121,6 +122,56 @@ app.get('/api/ventas', async (req, res) => {
   }
 });
 
+app.post('/api/webhook', async (req, res) => {
+  const data = req.body;
+
+  try {
+    // Verificás si es una notificación de pago aprobado
+    if (data.type === 'payment') {
+      const paymentId = data.data.id;
+
+      const paymentDetails = await payment.get({ id: paymentId });
+
+      const info = paymentDetails.body;
+
+      // Asegurarte que está aprobado
+      if (info.status === 'approved') {
+        const email = info.payer?.email;
+        const plan = info.additional_info?.items?.[0]?.title || info.description;
+
+        // Acá enviás el email al cliente
+        await enviarEmailAlCliente({
+          to: email,
+          subject: 'Gracias por tu compra',
+          text: `Hola, gracias por tu compra. Detalles del plan: ${plan}. Monto: $${info.transaction_amount}.`
+        });
+
+        console.log(`✉️ Email enviado a ${email}`);
+      }
+    }
+
+    res.status(200).send('OK');
+  } catch (err) {
+    console.error('❌ Error en webhook:', err);
+    res.status(500).send('Error procesando webhook');
+  }
+});
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: 'aaron.e.francolino@gmail.com',
+    pass: 'levt tpwt zqsv hkoc'
+  }
+});
+
+async function enviarEmailAlCliente({ to, subject, text }) {
+  await transporter.sendMail({
+    from: 'Tu Empresa <aaron.e.francolino@gmail.com>',
+    to,
+    subject,
+    text
+  });
+}
 
   app.listen(3000, () => {
   console.log('Servidor backend escuchando en http://localhost:3000');
