@@ -11,18 +11,23 @@ const mercadopago = new MercadoPagoConfig({
 
 const preference = new Preference(mercadopago);
 const payment = new Payment(mercadopago);
+
 const corsOptions = {
   origin: [
-    'https://innovatexx.netlify.app',   // tu frontend en producción
-    'http://localhost:4200',             // tu frontend local para pruebas
-    // puedes agregar más dominios que necesites autorizar
+    'https://innovatexx.netlify.app',
+    'http://localhost:4200'
   ],
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true,
+  optionsSuccessStatus: 200
 };
 
-app.use(cors(corsOptions));
 const app = express();
+
+// Middlewares
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Habilitar preflight para todas las rutas
 app.use(express.json());
 
 // Crear preferencia
