@@ -15,16 +15,9 @@ const payment = new Payment(mercadopago);
 const app = express();
 
 // Configuración CORS
-const corsOptions = {
-  origin: [
-    'https://innovatexx.netlify.app',
-    'http://localhost:4200'
-  ],
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-};
-
-app.use(cors(corsOptions));
+app.use(cors({
+  origin: ['https://innovatexx.netlify.app', 'http://localhost:4200']
+}));
 app.use(express.json());
 
 
