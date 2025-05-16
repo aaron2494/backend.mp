@@ -36,7 +36,6 @@ app.post('/api/crear-preferencia', async (req, res) => {
           }
         ],
         external_reference: `webpage-client::${origen}`,
-           external_reference: `webpage-client::${origen}`,
     back_urls: {
       success: 'https://innovatexx.netlify.app/pago-exitoso',
       failure: 'https://innovatexx.netlify.app/pago-fallido',
@@ -111,8 +110,53 @@ app.get('/api/ventas', async (req, res) => {
     res.status(500).json({ error: "Error al obtener ventas" });
   }
 });
+app.post('/api/mercado-pago-webhook', async (req, res) => {
+  try {
+    const { type, data } = req.body;
 
+    if (type === 'payment') {
+      const paymentInfo = await payment.get({ id: data.id });
 
+      if (paymentInfo.status === 'approved') {
+        const emailCliente = paymentInfo.payer?.email;
+        const producto = paymentInfo.additional_info?.items?.[0]?.title;
+
+        await enviarEmailDeConfirmacion(emailCliente, producto);
+      }
+    }
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error('❌ Error en webhook:', err);
+    res.sendStatus(500);
+  }
+});
+
+const nodemailer = require('nodemailer');
+
+async function enviarEmailDeConfirmacion(destinatario, producto) {
+  try {
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'aaron.e.francolino@gmail.com',
+        pass: 'swyo ubtx wkxv qtmp'
+      }
+    });
+
+    const mailOptions = {
+      from: 'aaron.e.francolino@gmail.com',
+      to: destinatario,
+      subject: 'Confirmación de compra',
+      html: `<h2>Gracias por tu compra</h2><p>Has adquirido el producto: <strong>${producto}</strong>.</p>`
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`📧 Email enviado a ${destinatario}`);
+  } catch (error) {
+    console.error('❌ Error al enviar el email:', error);
+  }
+}
   app.listen(3000, () => {
   console.log('Servidor backend escuchando en http://localhost:3000');
 });
