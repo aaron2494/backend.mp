@@ -13,8 +13,20 @@ const preference = new Preference(mercadopago);
 const payment = new Payment(mercadopago);
 
 const app = express();
+
+// Configuración CORS
+const corsOptions = {
+  origin: [
+    'https://innovatexx.netlify.app',
+    'http://localhost:4200'
+  ],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
-app.use(cors());
+
 
 // Crear preferencia
 app.post('/api/crear-preferencia', async (req, res) => {
@@ -107,6 +119,57 @@ app.get('/api/ventas', async (req, res) => {
     res.status(500).json({ error: "Error al obtener ventas" });
   }
 });
+
+app.post('/api/webhook', async (req, res) => {
+  const paymentId = req.body?.data?.id;
+
+  try {
+    if (req.body.type === 'payment') {
+      const pago = await payment.get({ id: paymentId });
+
+      if (pago.status === 'approved') {
+        const email = pago.payer?.email;
+        const plan = pago.additional_info?.items?.[0]?.title || 'Sin plan';
+
+        // Acá enviás el email
+        await enviarEmailAlCliente(email, plan, pago.id);
+
+        console.log(`📧 Email enviado a ${email}`);
+      }
+    }
+
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('❌ Error en webhook:', error);
+    res.sendStatus(500);
+  }
+});
+const nodemailer = require('nodemailer');
+
+async function enviarEmailAlCliente(email, plan, idPago) {
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: 'aaron.e.francolino@gmail.com',
+      pass: 'levt tpwt zqsv hkoc'
+    }
+  });
+
+  const mailOptions = {
+    from: 'aaron.e.francolino@gmail.com',
+    to: email,
+    subject: 'Gracias por tu compra',
+    html: `
+      <h2>¡Gracias por tu compra!</h2>
+      <p>Tu pago fue aprobado correctamente.</p>
+      <p><strong>Plan:</strong> ${plan}</p>
+      <p><strong>ID de pago:</strong> ${idPago}</p>
+    `
+  };
+
+  await transporter.sendMail(mailOptions);
+}
+
 
   app.listen(3000, () => {
   console.log('Servidor backend escuchando en http://localhost:3000');
