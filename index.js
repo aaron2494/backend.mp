@@ -21,23 +21,19 @@ const transporter = nodemailer.createTransport({
 });
 const app = express();
 // 1. Configuración CORS debe ir PRIMERO
-app.use(cors({
-  origin: ['https://innovatexx.netlify.app', 'http://localhost:4200'],
+const corsOptions = {
+  origin: [
+    'https://innovatexx.netlify.app',
+    'http://localhost:4200'
+  ],
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+};
+
+app.use(cors(corsOptions)); // CORS primero
 
 app.use(express.json());
-// Middleware para manejar OPTIONS manualmente
-app.use((req, res, next) => {
-  if (req.method === 'OPTIONS') {
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    return res.status(200).end();
-  }
-  next();
-});
-
 // 3. Verificar conexión SMTP al iniciar
 transporter.verify((error) => {
   if (error) {
@@ -66,7 +62,10 @@ app.post('/api/crear-preferencia', async (req, res) => {
             unit_price: plan.precio
           }
         ],
-        external_reference: `webpage-client::${origen}`
+        external_reference: `webpage-client::${origen}`,back_urls: {
+      success: 'https://innovatexx.netlify.app/pago-exitoso',
+    },
+    auto_return: 'approved'
       }
     });
 
@@ -136,54 +135,6 @@ app.get('/api/ventas', async (req, res) => {
   }
 });
 
-// 4. Webhook mejorado
-app.post('/api/webhook', async (req, res) => {
-  try {
-    // Respuesta inmediata para MP
-    res.sendStatus(200);
-    
-    // Procesamiento asíncrono
-    const paymentId = req.body?.data?.id;
-    if (!paymentId || req.body.type !== 'payment') return;
-
-    const pago = await payment.get({ id: paymentId });
-    
-    if (pago.status === 'approved') {
-      const email = pago.payer?.email;
-      const plan = pago.additional_info?.items?.[0]?.title || 'Sin plan';
-      
-      if (email) {
-        await enviarEmailAlCliente(email, plan, pago.id);
-      }
-    }
-  } catch (error) {
-    console.error('❌ Error en webhook:', error);
-  }
-});
-
-// 5. Función de email con mejor manejo de errores
-async function enviarEmailAlCliente(email, plan, idPago) {
-  try {
-    const mailOptions = {
-      from: 'InnovateXX <aaron.e.francolino@gmail.com>',
-      to: email,
-      subject: 'Confirmación de compra',
-      html: `
-        <h2>¡Gracias por tu compra en InnovateXX!</h2>
-        <p>Detalles de tu transacción:</p>
-        <ul>
-          <li><strong>Plan:</strong> ${plan}</li>
-          <li><strong>ID de transacción:</strong> ${idPago}</li>
-        </ul>
-      `
-    };
-
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`📧 Email enviado a ${email} (ID: ${info.messageId})`);
-  } catch (error) {
-    console.error(`❌ Fallo al enviar email a ${email}:`, error);
-  }
-}
 
   app.listen(3000, () => {
   console.log('Servidor backend escuchando en http://localhost:3000');
