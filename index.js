@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const MercadoPago = require('mercadopago');
 
+const nodemailer = require('nodemailer');
 // SDK v2
 const { MercadoPagoConfig, Preference, Payment } = MercadoPago;
 
@@ -146,7 +147,6 @@ app.post('/api/mercado-pago-webhook', async (req, res) => {
   }
 });
 
-const nodemailer = require('nodemailer');
 
 async function enviarEmailDeConfirmacion(destinatario, producto) {
   try {
