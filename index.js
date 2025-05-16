@@ -147,30 +147,6 @@ app.post('/api/mercado-pago-webhook', async (req, res) => {
   }
 });
 
-
-async function enviarEmailDeConfirmacion(destinatario, producto) {
-  try {
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: 'aaron.e.francolino@gmail.com',
-        pass: 'swyo ubtx wkxv qtmp'
-      }
-    });
-
-    const mailOptions = {
-      from: 'aaron.e.francolino@gmail.com',
-      to: destinatario,
-      subject: 'Confirmación de compra',
-      html: `<h2>Gracias por tu compra</h2><p>Has adquirido el producto: <strong>${producto}</strong>.</p>`
-    };
-
-    await transporter.sendMail(mailOptions);
-    console.log(`📧 Email enviado a ${destinatario}`);
-  } catch (error) {
-    console.error('❌ Error al enviar el email:', error);
-  }
-}
   app.listen(3000, () => {
   console.log('Servidor backend escuchando en http://localhost:3000');
 });
