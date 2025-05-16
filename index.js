@@ -121,9 +121,25 @@ app.get('/api/ventas', async (req, res) => {
 });
 
 app.post('/api/webhook', async (req, res) => {
-  console.log('📩 Webhook recibido:', JSON.stringify(req.body, null, 2));
-  const paymentId = req.body?.data?.id; 
- }) 
+  res.sendStatus(200); // 👈 Respondé rápido
+
+  const paymentId = req.body?.data?.id;
+  if (req.body.type !== 'payment') return;
+
+  try {
+    const pago = await payment.get({ id: paymentId });
+
+    if (pago.status === 'approved') {
+      const email = pago.payer?.email;
+      const plan = pago.additional_info?.items?.[0]?.title || 'Sin plan';
+      await enviarEmailAlCliente(email, plan, pago.id);
+      console.log(`📧 Email enviado a ${email}`);
+    }
+  } catch (error) {
+    console.error('❌ Error en webhook:', error);
+  }
+});
+
 
 
   app.listen(3000, () => {
