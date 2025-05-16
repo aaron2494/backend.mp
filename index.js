@@ -32,9 +32,22 @@ transporter.verify((error) => {
   }
 });
 
-const app = express();
+// Configuración CORS específica
+const corsOptions = {
+  origin: [
+    'https://innovatexx.netlify.app',
+    'http://localhost:4200' // Para desarrollo local
+  ],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+};
+
+// Middlewares
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Habilitar preflight para todas las rutas
 app.use(express.json());
-app.use(cors());
+
 
 // Crear preferencia
 app.post('/api/crear-preferencia', async (req, res) => {
