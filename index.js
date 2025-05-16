@@ -21,19 +21,23 @@ const transporter = nodemailer.createTransport({
 });
 const app = express();
 // 1. Configuración CORS debe ir PRIMERO
-const corsOptions = {
-  origin: [
-    'https://innovatexx.netlify.app',
-    'http://localhost:4200'
-  ],
+app.use(cors({
+  origin: ['https://innovatexx.netlify.app', 'http://localhost:4200'],
   methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-};
-
-app.use(cors(corsOptions)); // CORS primero
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 app.use(express.json());
+// Middleware para manejar OPTIONS manualmente
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return res.status(200).end();
+  }
+  next();
+});
+
 // 3. Verificar conexión SMTP al iniciar
 transporter.verify((error) => {
   if (error) {
