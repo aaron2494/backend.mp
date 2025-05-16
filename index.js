@@ -11,10 +11,19 @@ const mercadopago = new MercadoPagoConfig({
 
 const preference = new Preference(mercadopago);
 const payment = new Payment(mercadopago);
+const corsOptions = {
+  origin: [
+    'https://innovatexx.netlify.app',   // tu frontend en producción
+    'http://localhost:4200',             // tu frontend local para pruebas
+    // puedes agregar más dominios que necesites autorizar
+  ],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
 
+app.use(cors(corsOptions));
 const app = express();
 app.use(express.json());
-app.use(cors());
 
 // Crear preferencia
 app.post('/api/crear-preferencia', async (req, res) => {
