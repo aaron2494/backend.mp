@@ -200,7 +200,7 @@ async function enviarEmailAlCliente({ to, plan }) {
   `;
 
   await transporter.sendMail({
-    from: 'Innovatexx <tuemail@gmail.com>',
+    from: 'Innovatech <aaron.e.francolino@gmail.com>',
     to,
     subject: `🧾 Confirmación de compra: Plan ${plan}`,
     html: htmlContent
