@@ -125,27 +125,6 @@ app.get('/api/ventas', async (req, res) => {
     res.status(500).json({ error: "Error al obtener ventas" });
   }
 });
-app.post('/api/mercado-pago-webhook', async (req, res) => {
-  try {
-    const { type, data } = req.body;
-
-    if (type === 'payment') {
-      const paymentInfo = await payment.get({ id: data.id });
-
-      if (paymentInfo.status === 'approved') {
-        const emailCliente = paymentInfo.payer?.email;
-        const producto = paymentInfo.additional_info?.items?.[0]?.title;
-
-        await enviarEmailDeConfirmacion(emailCliente, producto);
-      }
-    }
-
-    res.sendStatus(200);
-  } catch (err) {
-    console.error('❌ Error en webhook:', err);
-    res.sendStatus(500);
-  }
-});
 
   app.listen(3000, () => {
   console.log('Servidor backend escuchando en http://localhost:3000');
