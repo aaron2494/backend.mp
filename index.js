@@ -125,3 +125,4 @@ app.get('/api/ventas', async (req, res) => {
   app.listen(3000, () => {
   console.log('Servidor backend escuchando en http://localhost:3000');
 });
+module.exports = app;
