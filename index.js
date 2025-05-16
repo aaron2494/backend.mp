@@ -2,11 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const MercadoPago = require('mercadopago');
 
-const corsOptions = {
-  origin: ['http://localhost:4200', 'https://innovatexx.netlify.app'],
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type']
-};
 // SDK v2
 const { MercadoPagoConfig, Preference, Payment } = MercadoPago;
 
@@ -19,7 +14,7 @@ const payment = new Payment(mercadopago);
 
 const app = express();
 app.use(express.json());
-app.use(cors(corsOptions));
+app.use(cors());
 
 // Crear preferencia
 app.post('/api/crear-preferencia', async (req, res) => {
@@ -117,48 +112,6 @@ app.get('/api/ventas', async (req, res) => {
   }
 });
 
-app.post('/api/mercado-pago-webhook', async (req, res) => {
-  try {
-    const { type, data } = req.body;
-
-    if (type === 'payment') {
-      const paymentInfo = await payment.get({ id: data.id });
-
-      if (paymentInfo.status === 'approved') {
-        const emailCliente = paymentInfo.payer?.email;
-        const producto = paymentInfo.additional_info?.items?.[0]?.title;
-
-        // 🔔 Enviar email aquí
-        await enviarEmailDeConfirmacion(emailCliente, producto);
-      }
-    }
-
-    res.sendStatus(200);
-  } catch (err) {
-    console.error('❌ Error en webhook:', err);
-    res.sendStatus(500);
-  }
-});
-const nodemailer = require('nodemailer');
-
-async function enviarEmailDeConfirmacion(destinatario, producto) {
-  const transporter = nodemailer.createTransport({
-    service: 'gmail', // o SMTP de tu proveedor
-    auth: {
-      user: 'aaraon.e.francolino@gmail.com',
-      pass: 'xzwr etsu edwk ffqz'
-    }
-  });
-
-  const mailOptions = {
-    from: '"Innovatexx" <aaraon.e.francolino@gmail.com>',
-    to: destinatario,
-    subject: 'Confirmación de compra',
-    html: `<h2>¡Gracias por tu compra!</h2><p>Has adquirido el plan: <strong>${producto}</strong>.</p>`
-  };
-
-  await transporter.sendMail(mailOptions);
-}
 
   app.listen(3000, () => {
   console.log('Servidor backend escuchando en http://localhost:3000');
