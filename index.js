@@ -2,11 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const MercadoPago = require('mercadopago');
 const nodemailer = require('nodemailer');
+require('dotenv').config();
 // SDK v2
 const { MercadoPagoConfig, Preference, Payment } = MercadoPago;
 
 const mercadopago = new MercadoPagoConfig({
-  accessToken: 'APP_USR-8894316476633004-051407-6244e92db1c8beb7e8212b575fe08641-179271995'
+  accessToken: process.env.MP_ACCESS_TOKEN
 });
 
 const preference = new Preference(mercadopago);
@@ -196,7 +197,13 @@ async function enviarEmailAlCliente({ to, plan }) {
       <p style="font-size: 12px; color: #777;">Este mensaje fue enviado automáticamente. Si tienes alguna duda, no dudes en escribirnos a contacto@innovatexx.com</p>
     </div>
   `;
-
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+     user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
   await transporter.sendMail({
     from: 'Innovatech <aaron.e.francolino@gmail.com>',
     to,
