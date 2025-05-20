@@ -3,8 +3,8 @@ const cors = require('cors');
 const MercadoPago = require('mercadopago');
 const nodemailer = require('nodemailer');
 const { initializeApp, cert } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
 const serviceAccount = require('./firebase-service-account.json');
+const admin = require('firebase-admin');
 
 require('dotenv').config();
 // SDK v2
@@ -18,11 +18,12 @@ const mercadopago = new MercadoPagoConfig({
   sandbox: true // Asegurar modo prueba
 });
 
+
 const preference = new Preference(mercadopago);
 const payment = new Payment(mercadopago);
 // Configuración del transporter de email
 const app = express();
-const db = getFirestore();
+
 // 1. Configuración CORS debe ir PRIMERO
 const corsOptions = {
   origin: [
@@ -267,23 +268,47 @@ app.post('/api/registrar-plan', async (req, res) => {
     res.status(500).json({ error: 'Error al guardar el plan' });
   }
 });
+// Asegúrate de tener inicializado Firebase Admin
+if (admin.apps.length === 0) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: "https://innovatech-f77d8.firebaseio.com"
+  });
+}
+const db = admin.firestore();
 
 // Ruta para consultar el plan de un usuario por email
 app.get('/api/usuario/:email/plan', async (req, res) => {
   const email = req.params.email;
 
+  // Validación básica del email
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'Email inválido' });
+  }
+
   try {
     const doc = await db.collection('usuarios').doc(email).get();
 
     if (!doc.exists) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
+      return res.status(404).json({ 
+        exists: false,
+        message: 'Usuario no registrado' 
+      });
     }
 
-    const data = doc.data();
-    res.status(200).json({ planAdquirido: data?.planAdquirido || null });
+    const userData = doc.data();
+    res.status(200).json({
+      exists: true,
+      planAdquirido: userData?.planAdquirido || null,
+      ultimaActualizacion: userData?.fechaActualizacion || null
+    });
+
   } catch (error) {
-    console.error('Error al obtener plan:', error);
-    res.status(500).json({ error: 'Error al obtener plan' });
+    console.error('Error Firestore:', error);
+    res.status(500).json({ 
+      error: 'Error al consultar la base de datos',
+      detalle: process.env.NODE_ENV === 'development' ? error.message : null
+    });
   }
 });
   app.listen(3000, () => {
