@@ -14,7 +14,8 @@ initializeApp({
 const { MercadoPagoConfig, Preference, Payment } = MercadoPago;
 
 const mercadopago = new MercadoPagoConfig({
-  accessToken: process.env.MP_ACCESS_TOKEN
+  accessToken: process.env.MP_ACCESS_TOKEN,
+  sandbox: true // Asegurar modo prueba
 });
 
 const preference = new Preference(mercadopago);
