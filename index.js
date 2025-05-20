@@ -2,15 +2,11 @@ const express = require('express');
 const cors = require('cors');
 const MercadoPago = require('mercadopago');
 const nodemailer = require('nodemailer');
-const { initializeApp, cert } = require('firebase-admin/app');
 const serviceAccount = require('./firebase-service-account.json');
 const admin = require('firebase-admin');
 
 require('dotenv').config();
-// SDK v2
-initializeApp({
-  credential: cert(serviceAccount)
-});
+
 const { MercadoPagoConfig, Preference, Payment } = MercadoPago;
 
 const mercadopago = new MercadoPagoConfig({
