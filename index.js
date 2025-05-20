@@ -2,8 +2,15 @@ const express = require('express');
 const cors = require('cors');
 const MercadoPago = require('mercadopago');
 const nodemailer = require('nodemailer');
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
+const serviceAccount = require('./firebase-service-account.json');
+
 require('dotenv').config();
 // SDK v2
+initializeApp({
+  credential: cert(serviceAccount)
+});
 const { MercadoPagoConfig, Preference, Payment } = MercadoPago;
 
 const mercadopago = new MercadoPagoConfig({
@@ -14,6 +21,7 @@ const preference = new Preference(mercadopago);
 const payment = new Payment(mercadopago);
 // Configuración del transporter de email
 const app = express();
+const db = getFirestore();
 // 1. Configuración CORS debe ir PRIMERO
 const corsOptions = {
   origin: [
@@ -49,7 +57,7 @@ app.post('/api/crear-preferencia', async (req, res) => {
             unit_price: plan.precio
           }
         ],
-        external_reference: `webpage-client::${origen}`,
+        external_reference: `webpage-client::${origen}::${plan.nombre.toLowerCase()}`,
         back_urls: {
       success: 'https://innovatexx.netlify.app/pago-exitoso',
     },
@@ -130,23 +138,29 @@ app.post('/api/guardar-compra', (req, res) => {
   // Acá podrías guardar en una base de datos si querés
   res.status(200).json({ mensaje: 'Compra guardada exitosamente' });
 });
-app.get('/api/usuario/:email/plan', async (req, res) => {
-  const email = req.params.email;
+// POST /api/registrar-plan
+app.post('/api/registrar-plan', async (req, res) => {
+  const { email, plan } = req.body;
+
+  if (!email || !plan) {
+    return res.status(400).json({ error: 'Faltan datos' });
+  }
 
   try {
-    const usuario = await Usuario.findOne({ where: { email } });
+    // Guardar en tu base de datos
+    // Ejemplo usando MongoDB:
+    await db.collection('usuarios').updateOne(
+      { email },
+      { $set: { planAdquirido: plan } },
+      { upsert: true }
+    );
 
-    if (!usuario) {
-      return res.status(404).json({ mensaje: 'Usuario no encontrado' });
-    }
-
-    return res.json(usuario.plan); // Devuelve solo el nombre del plan
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ mensaje: 'Error del servidor' });
+    res.status(200).json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al guardar el plan' });
   }
 });
-
 app.post('/api/webhook', async (req, res) => {
    const data = req.body;
 
@@ -235,7 +249,42 @@ const transporter = nodemailer.createTransport({
     html: htmlContent
   });
 }
+app.post('/api/registrar-plan', async (req, res) => {
+  const { email, plan } = req.body;
 
+  if (!email || !plan) {
+    return res.status(400).json({ error: 'Faltan datos' });
+  }
+
+  try {
+    const docRef = db.collection('usuarios').doc(email);
+    await docRef.set({ email, planAdquirido: plan }, { merge: true });
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error al guardar el plan:', error);
+    res.status(500).json({ error: 'Error al guardar el plan' });
+  }
+});
+
+// Ruta para consultar el plan de un usuario por email
+app.get('/api/usuario/:email/plan', async (req, res) => {
+  const email = req.params.email;
+
+  try {
+    const doc = await db.collection('usuarios').doc(email).get();
+
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const data = doc.data();
+    res.status(200).json({ planAdquirido: data?.planAdquirido || null });
+  } catch (error) {
+    console.error('Error al obtener plan:', error);
+    res.status(500).json({ error: 'Error al obtener plan' });
+  }
+});
   app.listen(3000, () => {
   console.log('Servidor backend escuchando en http://localhost:3000');
 });
