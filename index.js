@@ -122,6 +122,30 @@ app.get('/api/ventas', async (req, res) => {
     res.status(500).json({ error: "Error al obtener ventas" });
   }
 });
+app.post('/api/guardar-compra', (req, res) => {
+  const { userId, email, plan } = req.body;
+
+  console.log('📝 Guardando compra:', { userId, email, plan });
+
+  // Acá podrías guardar en una base de datos si querés
+  res.status(200).json({ mensaje: 'Compra guardada exitosamente' });
+});
+app.get('/api/usuario/:email/plan', async (req, res) => {
+  const email = req.params.email;
+
+  try {
+    const usuario = await Usuario.findOne({ where: { email } });
+
+    if (!usuario) {
+      return res.status(404).json({ mensaje: 'Usuario no encontrado' });
+    }
+
+    return res.json(usuario.plan); // Devuelve solo el nombre del plan
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ mensaje: 'Error del servidor' });
+  }
+});
 
 app.post('/api/webhook', async (req, res) => {
    const data = req.body;
