@@ -248,37 +248,24 @@ const transporter = nodemailer.createTransport({
   });
 }
 app.post('/api/registrar-plan', async (req, res) => {
-  const { email, plan } = req.body;
-
-  // Validación más robusta
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({ error: 'Email inválido' });
-  }
-
-  const planesPermitidos = ['basico', 'premium', 'empresa'];
-  if (!planesPermitidos.includes(plan)) {
-    return res.status(400).json({ error: 'Plan no válido' });
-  }
-
   try {
-    const docRef = db.collection('usuarios').doc(email);
-    await docRef.set({ 
-      email,
-      planAdquirido: plan,
-      fechaActualizacion: new Date().toISOString(), // Campo adicional útil
-      historicoPlanes: admin.firestore.FieldValue.arrayUnion(plan) // Guarda histórico
-    }, { merge: true });
+    const { email, planAdquirido } = req.body;
+    console.log("Datos recibidos:", { email, planAdquirido });
 
-    console.log(`Plan actualizado para ${email}: ${plan}`);
-    res.status(200).json({ success: true });
-  } catch (error) {
-    console.error('Error al guardar el plan:', error);
-    res.status(500).json({ 
-      error: 'Error al guardar el plan',
-      detalle: error.message // Solo en desarrollo, no en producción
+    const docRef = doc(db, 'usuarios', email);
+    await setDoc(docRef, {
+      planAdquirido,
+      fechaActualizacion: new Date().toISOString(),
     });
+    
+    console.log("Documento creado correctamente");
+    res.status(200).json({ message: 'Plan registrado correctamente' });
+  } catch (error) {
+    console.error("Error al registrar el plan:", error);
+    res.status(500).json({ error: 'Error al registrar el plan' });
   }
 });
+
 // Asegúrate de tener inicializado Firebase Admin
 if (admin.apps.length === 0) {
   admin.initializeApp({
