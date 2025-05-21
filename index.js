@@ -146,38 +146,51 @@ app.post('/api/guardar-compra', (req, res) => {
 });
 
 app.post('/api/webhook', async (req, res) => {
-   const data = req.body;
-
+const data = req.body;
   console.log('📨 Webhook recibido:', JSON.stringify(data, null, 2));
 
   try {
-    if (data.type === 'payment') {
-      const paymentId = data.data.id;
-      console.log('💳 Buscando detalles del pago ID:', paymentId);
-
-      const paymentDetails = await payment.get({ id: paymentId });
-      const info = paymentDetails.body;
-
-      console.log('ℹ️ Detalles del pago:', info);
-
-      if (info.status === 'approved') {
-        const email = info.payer?.email;
-        const planComprado = info.additional_info?.items?.[0]?.title || 'Desconocido';
-        console.log('✅ Pago aprobado. Enviando mail a:', email, 'Plan:', planComprado);
-
-        await enviarEmailAlCliente({
-          to: email,
-          plan: planComprado
-        });
-        console.log(`✉️ Email enviado a ${email}`);
-      } else {
-        console.log('⚠️ El pago no está aprobado. Estado:', info.status);
-      }
+    if (data.type !== 'payment') {
+      return res.status(200).send('Evento no manejado (no es payment)');
     }
+
+    const paymentId = data.data.id;
+    const paymentDetails = await payment.get({ id: paymentId });
+    const info = paymentDetails.body;
+
+    // Validación crítica
+    if (info.status !== 'approved') {
+      console.log('⚠️ Pago no aprobado. Estado:', info.status);
+      return res.status(200).send('Pago no aprobado');
+    }
+
+    const email = info.payer?.email;
+    const planComprado = info.additional_info?.items?.[0]?.title || 'Desconocido';
+
+    if (!email) {
+      throw new Error('Email no disponible en el pago');
+    }
+
+    // 🔥 Paso 1: Registrar plan en Firestore
+    await admin.firestore().collection('usuarios').doc(email).set({
+      planAdquirido: planComprado,
+      fechaActualizacion: new Date().toISOString(),
+      mpPaymentId: paymentId // Guardar referencia al pago
+    }, { merge: true }); // Merge evita sobrescribir otros campos
+
+    console.log('✅ Plan registrado en Firestore para:', email);
+
+    // ✉️ Paso 2: Enviar email (en paralelo para no bloquear la respuesta)
+    enviarEmailAlCliente({ 
+      to: email, 
+      plan: planComprado 
+    }).catch(emailError => {
+      console.error('❌ Error enviando email:', emailError);
+    });
 
     res.status(200).send('OK');
   } catch (err) {
-    console.error('❌ Error en webhook:', err.message || err);
+    console.error('❌ Error crítico en webhook:', err);
     res.status(500).send('Error procesando webhook');
   }
 });
@@ -198,43 +211,36 @@ async function enviarEmailAlCliente({ to, plan }) {
     }
   };
 
-  const info = planes[plan] || {
+   const planLower = plan.toLowerCase(); // Normaliza a minúsculas
+  const info = planes[planLower] || {
     descripcion: 'Gracias por adquirir uno de nuestros servicios.',
     precio: 0
   };
 
-  const htmlContent = `
-    <div style="font-family: 'Segoe UI', sans-serif; color: #333; padding: 20px; line-height: 1.6;">
-      <h2 style="color: #2c3e50;">🎉 ¡Gracias por tu compra!</h2>
-      <p>Hola,</p>
-      <p>Te agradecemos por confiar en <strong>Innovatexx</strong>. Has adquirido el plan <strong>${plan}</strong>, una excelente elección para potenciar tu negocio.</p>
-      <div style="border-left: 4px solid #3498db; padding-left: 15px; margin: 20px 0;">
-        <h3 style="margin-bottom: 5px;">📦 Plan ${plan}</h3>
-        <p style="margin: 0;"><em>${info.descripcion}</em></p>
-        <p style="margin-top: 10px;"><strong>Precio abonado:</strong> $${info.precio} ARS</p>
-      </div>
-      <p>En breve nos pondremos en contacto contigo para comenzar con el proceso de implementación.</p>
-      <p style="margin-top: 30px;">Saludos cordiales,<br><strong>El equipo de Innovatexx</strong></p>
-      <hr style="margin-top: 40px; border: none; border-top: 1px solid #ccc;" />
-      <p style="font-size: 12px; color: #777;">Este mensaje fue enviado automáticamente. Si tienes alguna duda, no dudes en escribirnos a contacto@innovatexx.com</p>
-    </div>
-  `;
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-});
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    }
+  });
+
   await transporter.sendMail({
-    from: 'Innovatech <aaron.e.francolino@gmail.com>',
+    from: `Innovatexx <${process.env.EMAIL_USER}>`, // Usa el email del .env
     to,
     subject: `🧾 Confirmación de compra: Plan ${plan}`,
-    html: htmlContent
+    html: `
+      <div style="font-family: 'Segoe UI', sans-serif; color: #333; padding: 20px; line-height: 1.6;">
+        <h2 style="color: #2c3e50;">🎉 ¡Gracias por tu compra!</h2>
+        <p>Has adquirido el plan <strong>${plan}</strong>:</p>
+        <p><em>${info.descripcion}</em></p>
+        <p><strong>Precio:</strong> $${info.precio} ARS</p>
+        <p>Nos contactaremos contigo pronto.</p>
+      </div>
+    `
   });
 }
-// POST /api/registrar-plan (versión corregida)
-// POST /api/registrar-plan (versión corregida)
+
 app.post('/api/registrar-plan', async (req, res) => {
   try {
     const { email, planAdquirido } = req.body;
