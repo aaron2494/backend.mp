@@ -14,6 +14,14 @@ const mercadopago = new MercadoPagoConfig({
   sandbox:true
 });
 
+// Asegúrate de tener inicializado Firebase Admin
+if (admin.apps.length === 0) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: "https://innovatech-f77d8.firebaseio.com"
+  });
+}
+const db = admin.firestore();
 
 const preference = new Preference(mercadopago);
 const payment = new Payment(mercadopago);
@@ -136,29 +144,7 @@ app.post('/api/guardar-compra', (req, res) => {
   // Acá podrías guardar en una base de datos si querés
   res.status(200).json({ mensaje: 'Compra guardada exitosamente' });
 });
-// POST /api/registrar-plan
-app.post('/api/registrar-plan', async (req, res) => {
-  const { email, plan } = req.body;
 
-  if (!email || !plan) {
-    return res.status(400).json({ error: 'Faltan datos' });
-  }
-
-  try {
-    // Guardar en tu base de datos
-    // Ejemplo usando MongoDB:
-    await db.collection('usuarios').updateOne(
-      { email },
-      { $set: { planAdquirido: plan } },
-      { upsert: true }
-    );
-
-    res.status(200).json({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error al guardar el plan' });
-  }
-});
 app.post('/api/webhook', async (req, res) => {
    const data = req.body;
 
@@ -247,13 +233,15 @@ const transporter = nodemailer.createTransport({
     html: htmlContent
   });
 }
+// POST /api/registrar-plan (versión corregida)
+// POST /api/registrar-plan (versión corregida)
 app.post('/api/registrar-plan', async (req, res) => {
   try {
     const { email, planAdquirido } = req.body;
     console.log("Datos recibidos:", { email, planAdquirido });
 
-    const docRef = doc(db, 'usuarios', email);
-    await setDoc(docRef, {
+    // Versión CORRECTA usando Admin SDK
+    await db.collection('usuarios').doc(email).set({
       planAdquirido,
       fechaActualizacion: new Date().toISOString(),
     });
@@ -266,14 +254,6 @@ app.post('/api/registrar-plan', async (req, res) => {
   }
 });
 
-// Asegúrate de tener inicializado Firebase Admin
-if (admin.apps.length === 0) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    databaseURL: "https://innovatech-f77d8.firebaseio.com"
-  });
-}
-const db = admin.firestore();
 
 // Ruta para consultar el plan de un usuario por email
 app.get('/api/usuario/:email/plan', async (req, res) => {
