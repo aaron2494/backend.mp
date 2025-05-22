@@ -140,14 +140,26 @@ app.get('/api/ventas', async (req, res) => {
 });
 app.post('/api/webhook', async (req, res) => {
   const { type, data } = req.body;
-  
+
   if (type !== 'payment') {
     return res.status(200).json({ message: 'Evento ignorado' });
   }
 
   try {
-    const paymentInfo = (await payment.get({ id: data.id })).body;
-    
+    let paymentInfo;
+
+     if (process.env.NODE_ENV !== 'production' && data.id === 'test-pago') {
+      paymentInfo = {
+        status: 'approved',
+        payer: { email: 'aaron.e.francolino@gmail.com' },
+        metadata: { plan: 'Profesional' },
+        id: 'test-pago'
+      };
+    } else {
+      // Pago real de MercadoPago
+      paymentInfo = (await payment.get({ id: data.id })).body;
+    }
+
     if (paymentInfo.status !== 'approved') {
       return res.status(200).json({ message: 'Pago no aprobado' });
     }
@@ -166,7 +178,7 @@ app.post('/api/webhook', async (req, res) => {
       fechaActualizacion: new Date().toISOString()
     }, { merge: true });
 
-    // 2. Enviar email (no esperar)
+    // 2. Enviar email
     enviarEmailAlCliente({ to: email, plan });
 
     res.status(200).json({ success: true });
