@@ -38,6 +38,7 @@ const corsOptions = {
     allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 };
+app.use(express.urlencoded({ extended: true }));
 app.use(cors(corsOptions)); // CORS primero
 app.use(express.json());
 // Crear preferencia
@@ -233,38 +234,26 @@ async function enviarEmailAlCliente({ to, plan }) {
   });
 }
 app.get('/api/usuario/:email/plan', async (req, res) => {
-  const email = req.params.email;
-
-  // Validación básica del email
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({ error: 'Email inválido' });
-  }
-
   try {
-    const doc = await db.collection('usuarios').doc(email).get();
+    const email = decodeURIComponent(req.params.email);
+    const userDoc = await db.collection('usuarios').doc(email).get();
 
-    if (!doc.exists) {
-      return res.status(404).json({ 
-        exists: false,
-        message: 'Usuario no registrado' 
-      });
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    const userData = doc.data();
+    const data = userDoc.data();
     res.status(200).json({
-      exists: true,
-      planAdquirido: userData?.planAdquirido || null,
-      ultimaActualizacion: userData?.fechaActualizacion || null
+      planAdquirido: data.planAdquirido || null,
+      ultimoPago: data.ultimoPago || null,
+      fechaActualizacion: data.fechaActualizacion || null,
     });
-
   } catch (error) {
-    console.error('Error Firestore:', error);
-    res.status(500).json({ 
-      error: 'Error al consultar la base de datos',
-      detalle: process.env.NODE_ENV === 'development' ? error.message : null
-    });
+    console.error('Error al obtener el plan del usuario:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
+
   app.listen(3000, () => {
   console.log('Servidor backend escuchando en http://localhost:3000');
 });
