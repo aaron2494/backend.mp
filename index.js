@@ -38,43 +38,45 @@ const corsOptions = {
     allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 };
-
 app.use(cors(corsOptions)); // CORS primero
-
 app.use(express.json());
-
-
 // Crear preferencia
 app.post('/api/crear-preferencia', async (req, res) => {
   try {
     const { plan, origen } = req.body;
+    const email = origen;
 
-    if (!plan || !origen) {
-      return res.status(400).send('Faltan datos');
+    // Validación de campos requeridos
+    if (!plan?.nombre || !plan?.precio || !origen) {
+      return res.status(400).json({ 
+        error: 'Faltan datos requeridos',
+        detalles: {
+          requiere: {
+            plan: { nombre: 'string', precio: 'number' },
+            origen: 'string'
+          }
+        }
+      });
     }
 
     const result = await preference.create({
       body: {
-        items: [
-          {
-            title: plan.nombre,
-            quantity: 1,
-            currency_id: 'ARS',
-            unit_price: plan.precio
-          }
-        ],
-        external_reference: `webpage-client::${origen}::${plan.nombre.toLowerCase()}`,
-        back_urls: {
-      success: 'https://innovatexx.netlify.app/pago-exitoso',
-    },
-    auto_return: 'approved'
+       items: [{
+      title: plan.nombre,
+      unit_price: Number(plan.precio),
+      quantity: 1, // 👈 Este campo debe estar y debe ser > 0
+    }],
+        external_reference: `user::${email}::${plan.nombre.toLowerCase()}`,
+        metadata: { email, plan: plan.nombre }, // 👈 Añade metadata
+        back_urls: { success: 'https://innovatexx.netlify.app/pago-exitos' },
+        auto_return: 'approved'
       }
     });
 
     res.json({ preferenceId: result.id });
   } catch (error) {
-    console.error('Error al crear preferencia:', error);
-    res.status(500).send('Error al crear preferencia');
+    console.error('Error:', error);
+    res.status(500).json({ error: 'Error al crear preferencia' });
   }
 });
 
@@ -136,65 +138,43 @@ app.get('/api/ventas', async (req, res) => {
     res.status(500).json({ error: "Error al obtener ventas" });
   }
 });
-app.post('/api/guardar-compra', (req, res) => {
-  const { userId, email, plan } = req.body;
-
-  console.log('📝 Guardando compra:', { userId, email, plan });
-
-  // Acá podrías guardar en una base de datos si querés
-  res.status(200).json({ mensaje: 'Compra guardada exitosamente' });
-});
-
 app.post('/api/webhook', async (req, res) => {
-const data = req.body;
-  console.log('📨 Webhook recibido:', JSON.stringify(data, null, 2));
+  const { type, data } = req.body;
+  
+  if (type !== 'payment') {
+    return res.status(200).json({ message: 'Evento ignorado' });
+  }
 
   try {
-    if (data.type !== 'payment') {
-      return res.status(200).send('Evento no manejado (no es payment)');
+    const paymentInfo = (await payment.get({ id: data.id })).body;
+    
+    if (paymentInfo.status !== 'approved') {
+      return res.status(200).json({ message: 'Pago no aprobado' });
     }
 
-    const paymentId = data.data.id;
-    const paymentDetails = await payment.get({ id: paymentId });
-    const info = paymentDetails.body;
+    const email = paymentInfo.payer?.email;
+    const plan = paymentInfo.metadata?.plan || paymentInfo.additional_info?.items?.[0]?.title;
 
-    // Validación crítica
-    if (info.status !== 'approved') {
-      console.log('⚠️ Pago no aprobado. Estado:', info.status);
-      return res.status(200).send('Pago no aprobado');
+    if (!email || !plan) {
+      throw new Error('Datos incompletos en el pago');
     }
 
-    const email = info.payer?.email;
-    const planComprado = info.additional_info?.items?.[0]?.title || 'Desconocido';
+    // 1. Guardar en Firestore
+    await db.collection('usuarios').doc(email).set({
+      planAdquirido: plan,
+      ultimoPago: paymentInfo.id,
+      fechaActualizacion: new Date().toISOString()
+    }, { merge: true });
 
-    if (!email) {
-      throw new Error('Email no disponible en el pago');
-    }
+    // 2. Enviar email (no esperar)
+    enviarEmailAlCliente({ to: email, plan });
 
-    // 🔥 Paso 1: Registrar plan en Firestore
-    await admin.firestore().collection('usuarios').doc(email).set({
-      planAdquirido: planComprado,
-      fechaActualizacion: new Date().toISOString(),
-      mpPaymentId: paymentId // Guardar referencia al pago
-    }, { merge: true }); // Merge evita sobrescribir otros campos
-
-    console.log('✅ Plan registrado en Firestore para:', email);
-
-    // ✉️ Paso 2: Enviar email (en paralelo para no bloquear la respuesta)
-    enviarEmailAlCliente({ 
-      to: email, 
-      plan: planComprado 
-    }).catch(emailError => {
-      console.error('❌ Error enviando email:', emailError);
-    });
-
-    res.status(200).send('OK');
-  } catch (err) {
-    console.error('❌ Error crítico en webhook:', err);
-    res.status(500).send('Error procesando webhook');
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error en webhook:', error);
+    res.status(500).json({ error: 'Error procesando webhook' });
   }
 });
-
 async function enviarEmailAlCliente({ to, plan }) {
   const planes = {
     'Básico': {
@@ -240,28 +220,6 @@ async function enviarEmailAlCliente({ to, plan }) {
     `
   });
 }
-
-app.post('/api/registrar-plan', async (req, res) => {
-  try {
-    const { email, planAdquirido } = req.body;
-    console.log("Datos recibidos:", { email, planAdquirido });
-
-    // Versión CORRECTA usando Admin SDK
-    await db.collection('usuarios').doc(email).set({
-      planAdquirido,
-      fechaActualizacion: new Date().toISOString(),
-    });
-    
-    console.log("Documento creado correctamente");
-    res.status(200).json({ message: 'Plan registrado correctamente' });
-  } catch (error) {
-    console.error("Error al registrar el plan:", error);
-    res.status(500).json({ error: 'Error al registrar el plan' });
-  }
-});
-
-
-// Ruta para consultar el plan de un usuario por email
 app.get('/api/usuario/:email/plan', async (req, res) => {
   const email = req.params.email;
 
