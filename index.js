@@ -68,7 +68,7 @@ app.post('/api/crear-preferencia', async (req, res) => {
     }],
         external_reference: `user::${email}::${plan.nombre.toLowerCase()}`,
         metadata: { email, plan: plan.nombre }, // 👈 Añade metadata
-        back_urls: { success: 'https://innovatexx.netlify.app/pago-exitos' },
+        back_urls: { success: 'https://innovatexx.netlify.app/pago-exitoso' },
         auto_return: 'approved'
       }
     });
