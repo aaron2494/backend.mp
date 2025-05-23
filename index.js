@@ -141,73 +141,98 @@ app.get('/api/ventas', async (req, res) => {
 });
 app.post('/api/webhook', async (req, res) => {
   const { type, data } = req.body;
+  console.log('📨 Webhook recibido. Tipo:', type, '| ID:', data?.id);
 
+  // 1. Validación básica
   if (type !== 'payment') {
-    return res.status(200).json({ message: 'Evento ignorado' });
+    console.log('⚠️ Evento ignorado (no es payment)');
+    return res.status(200).json({ message: 'Evento no manejado' });
   }
 
   try {
+    // 2. Obtener detalles del pago
     let paymentInfo;
+    const isTestPayment = process.env.NODE_ENV !== 'production' && data.id === 'test-pago';
 
-     if (process.env.NODE_ENV !== 'production' && data.id === 'test-pago') {
+    if (isTestPayment) {
+      console.log('🔧 Usando datos de prueba');
       paymentInfo = {
         status: 'approved',
         payer: { email: 'aaron.e.francolino@gmail.com' },
-        metadata: { plan: 'Profesional' },
-        id: 'test-pago'
+        metadata: { plan: 'Premium' }, // Cambiado a Premium para coincidir con tu front
+        id: 'test-pago',
+        transaction_amount: 1000 // Añadido monto para pruebas
       };
     } else {
-      // Pago real de MercadoPago
       paymentInfo = (await payment.get({ id: data.id })).body;
+      console.log('💳 Datos reales del pago:', JSON.stringify(paymentInfo, null, 2));
     }
 
+    // 3. Validar estado del pago
     if (paymentInfo.status !== 'approved') {
+      console.log('❌ Pago no aprobado. Estado:', paymentInfo.status);
       return res.status(200).json({ message: 'Pago no aprobado' });
     }
 
-    const email = paymentInfo.payer?.email;
-    const plan = paymentInfo.metadata?.plan || paymentInfo.additional_info?.items?.[0]?.title;
+    // 4. Extraer datos clave (con múltiples fuentes de respaldo)
+    const email = paymentInfo.payer?.email || paymentInfo.metadata?.email;
+    const plan = paymentInfo.metadata?.plan || 
+                paymentInfo.external_reference?.split('::')[2] || 
+                paymentInfo.additional_info?.items?.[0]?.title;
 
     if (!email || !plan) {
-      throw new Error('Datos incompletos en el pago');
+      console.error('❌ Datos faltantes:', { email, plan });
+      throw new Error(`Datos incompletos. Email: ${email}, Plan: ${plan}`);
     }
 
-    // 1. Guardar en Firestore
-    await db.collection('usuarios').doc(email).set({
-      planAdquirido: plan,
-      ultimoPago: paymentInfo.id,
-      fechaActualizacion: new Date().toISOString()
-    }, { merge: true });
+    // 5. Guardar en Firestore (con más datos de auditoría)
+    const userData = {
+      planAdquirido: plan.toLowerCase(), // Normalizado a minúsculas
+      ultimoPago: {
+        id: paymentInfo.id,
+        monto: paymentInfo.transaction_amount,
+        metodo: paymentInfo.payment_method_id,
+        fecha: new Date().toISOString()
+      },
+      fechaActualizacion: new Date().toISOString(),
+      mpMetadata: paymentInfo.metadata // Guardamos toda la metadata original
+    };
 
-    // 2. Enviar email
-    enviarEmailAlCliente({ to: email, plan });
+    console.log('💾 Guardando en Firestore:', email, userData);
+    await db.collection('usuarios').doc(email).set(userData, { merge: true });
 
-    res.status(200).json({ success: true });
+    // 6. Enviar email (no esperar respuesta)
+    enviarEmailAlCliente({ 
+      to: email, 
+      plan: plan,
+      monto: paymentInfo.transaction_amount
+    }).catch(error => {
+      console.error('✉️ Error enviando email:', error);
+    });
+
+    res.status(200).json({ success: true, email, plan });
+
   } catch (error) {
-    console.error('Error en webhook:', error);
-    res.status(500).json({ error: 'Error procesando webhook' });
+    console.error('🔥 Error en webhook:', error);
+    res.status(500).json({ 
+      error: 'Error procesando webhook',
+      detalle: process.env.NODE_ENV !== 'production' ? error.message : null
+    });
   }
 });
-async function enviarEmailAlCliente({ to, plan }) {
+
+// Función de email mejorada
+async function enviarEmailAlCliente({ to, plan, monto }) {
   const planes = {
-    'Básico': {
-      descripcion: 'Ideal para pequeñas y medianas empresas que buscan optimizar sus procesos de manera eficiente. Incluye herramientas esenciales para el manejo de tu negocio, con soporte técnico básico. Perfecto para quienes están comenzando a dar sus primeros pasos en el mundo digital.',
-      precio: 1
-    },
-    'Profesional': {
-      descripcion: 'Solución avanzada para empresas que necesitan herramientas potentes para crecer y gestionar operaciones de mayor escala. Con acceso a funciones premium y soporte técnico prioritario, este plan está diseñado para optimizar la productividad y ofrecer soluciones personalizadas.',
-      precio: 2
-    },
-    'Premium': {
-      descripcion: 'Automatización total para empresas grandes y proyectos ambiciosos. Incluye las funcionalidades del plan Profesional y herramientas avanzadas de análisis, seguridad y gestión. Acceso a soporte personalizado 24/7, optimización de procesos a medida y características avanzadas para maximizar la eficiencia.',
-      precio: 3
-    }
+    'basico': { descripcion: '...', precio: 1 },
+    'profesional': { descripcion: '...', precio: 2 },
+    'premium': { descripcion: '...', precio: 3 }
   };
 
-   const planLower = plan.toLowerCase(); // Normaliza a minúsculas
-  const info = planes[planLower] || {
-    descripcion: 'Gracias por adquirir uno de nuestros servicios.',
-    precio: 0
+  const planKey = plan.toLowerCase();
+  const info = planes[planKey] || { 
+    descripcion: 'Plan personalizado',
+    precio: monto || 0
   };
 
   const transporter = nodemailer.createTransport({
@@ -219,20 +244,20 @@ async function enviarEmailAlCliente({ to, plan }) {
   });
 
   await transporter.sendMail({
-    from: `Innovatexx <${process.env.EMAIL_USER}>`, // Usa el email del .env
+    from: `innovatech<${process.env.EMAIL_USER}>`,
     to,
-    subject: `🧾 Confirmación de compra: Plan ${plan}`,
+    subject: `✅ Confirmación de compra: Plan ${plan}`,
     html: `
-      <div style="font-family: 'Segoe UI', sans-serif; color: #333; padding: 20px; line-height: 1.6;">
-        <h2 style="color: #2c3e50;">🎉 ¡Gracias por tu compra!</h2>
-        <p>Has adquirido el plan <strong>${plan}</strong>:</p>
-        <p><em>${info.descripcion}</em></p>
-        <p><strong>Precio:</strong> $${info.precio} ARS</p>
-        <p>Nos contactaremos contigo pronto.</p>
+      <div style="font-family: Poppins, sans-serif; color: #333; padding: 20px;">
+        <h2 style="color: #2c3e50;">¡Gracias por tu compra en innovatech!</h2>
+        <p>Has adquirido el <strong>Plan ${plan}</strong> por <strong>$${info.precio} ARS</strong>.</p>
+        <p>${info.descripcion}</p>
+        <p><small>ID de transacción: ${paymentInfo.id}</small></p>
       </div>
     `
   });
 }
+
 app.get('/api/usuario/:email/plan', async (req, res) => {
   try {
     const email = decodeURIComponent(req.params.email);
