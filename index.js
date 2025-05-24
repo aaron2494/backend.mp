@@ -175,10 +175,8 @@ app.post('/api/webhook', async (req, res) => {
     }
 
     // 4. Extraer datos clave (con múltiples fuentes de respaldo)
-    const email = paymentInfo.payer?.email || paymentInfo.metadata?.email;
-    const plan = paymentInfo.metadata?.plan || 
-                paymentInfo.external_reference?.split('::')[2] || 
-                paymentInfo.additional_info?.items?.[0]?.title;
+ const email = paymentInfo.payer?.email || paymentInfo.metadata?.email || paymentInfo.external_reference?.split('::')[1];
+const plan = paymentInfo.metadata?.plan || paymentInfo.external_reference?.split('::')[2];
 
     if (!email || !plan) {
       console.error('❌ Datos faltantes:', { email, plan });
