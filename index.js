@@ -265,13 +265,13 @@ async function enviarEmailAlCliente({ to, plan, monto }) {
 
 app.get('/api/usuario/:email/plan', async (req, res) => {
   try {
-    const email = decodeURIComponent(req.params.email).toLowerCase(); // 👈 Normalización
+    const email = decodeURIComponent(req.params.email).toLowerCase();
     const userDoc = await db.collection('usuarios').doc(email).get();
 
     if (!userDoc.exists) {
       return res.status(404).json({ 
         error: 'Usuario no encontrado',
-        suggestion: 'Verifique que el webhook haya ejecutado correctamente'
+        suggestion: 'El webhook aún no ha procesado este pago'
       });
     }
 
@@ -279,7 +279,7 @@ app.get('/api/usuario/:email/plan', async (req, res) => {
     res.status(200).json({
       planAdquirido: data?.planAdquirido || null,
       ultimoPago: data?.ultimoPago || null,
-      active: data?.planAdquirido && data?.fechaActualizacion // 👈 Nuevo campo
+      active: data?.planAdquirido && data?.fechaActualizacion
     });
   } catch (error) {
     console.error('Error al obtener el plan:', error);
