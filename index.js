@@ -159,12 +159,14 @@ app.post('/api/webhook', async (req, res) => {
       paymentInfo = {
         status: 'approved',
         payer: { email: 'aaron.e.francolino@gmail.com' },
-        metadata: { plan: 'Premium' }, // Cambiado a Premium para coincidir con tu front
+        metadata: { plan: 'Premium' },
+        external_reference: 'user::aaron.e.francolino@gmail.com::Premium', // 👈 Simula tu front
         id: 'test-pago',
-        transaction_amount: 1000 // Añadido monto para pruebas
+        transaction_amount: 1000,
+        payment_method_id: 'visa'
       };
     } else {
-      paymentInfo = (await payment.get({ id: data.id })).body;
+      paymentInfo = (await mercadopago.payment.get({ id: data.id })).body;
       console.log('💳 Datos reales del pago:', JSON.stringify(paymentInfo, null, 2));
     }
 
@@ -174,18 +176,20 @@ app.post('/api/webhook', async (req, res) => {
       return res.status(200).json({ message: 'Pago no aprobado' });
     }
 
-    // 4. Extraer datos clave (con múltiples fuentes de respaldo)
- const email = paymentInfo.payer?.email || paymentInfo.metadata?.email || paymentInfo.external_reference?.split('::')[1];
-const plan = paymentInfo.metadata?.plan || paymentInfo.external_reference?.split('::')[2];
+    // 4. Extraer datos clave
+    const externalRefParts = paymentInfo.external_reference?.split('::') || [];
+    const email = paymentInfo.payer?.email || paymentInfo.metadata?.email || externalRefParts[1];
+    const plan = paymentInfo.metadata?.plan || externalRefParts[2];
 
     if (!email || !plan) {
-      console.error('❌ Datos faltantes:', { email, plan });
-      throw new Error(`Datos incompletos. Email: ${email}, Plan: ${plan}`);
+      console.error('❌ Datos faltantes:', { email, plan, external_reference: paymentInfo.external_reference });
+      throw new Error('Email o plan no encontrados en metadata/external_reference');
     }
 
-    // 5. Guardar en Firestore (con más datos de auditoría)
+    // 5. Guardar en Firestore
+    const emailNormalizado = email.trim().toLowerCase();
     const userData = {
-      planAdquirido: plan.toLowerCase(), // Normalizado a minúsculas
+      planAdquirido: plan.toLowerCase(),
       ultimoPago: {
         id: paymentInfo.id,
         monto: paymentInfo.transaction_amount,
@@ -193,22 +197,25 @@ const plan = paymentInfo.metadata?.plan || paymentInfo.external_reference?.split
         fecha: new Date().toISOString()
       },
       fechaActualizacion: new Date().toISOString(),
-      mpMetadata: paymentInfo.metadata // Guardamos toda la metadata original
+      mpMetadata: paymentInfo.metadata
     };
 
-    console.log('💾 Guardando en Firestore:', email, userData);
-    await db.collection('usuarios').doc(email).set(userData, { merge: true });
+    console.log('💾 Guardando en Firestore:', emailNormalizado, userData);
+    await db.collection('usuarios').doc(emailNormalizado).set(userData, { merge: true });
 
-    // 6. Enviar email (no esperar respuesta)
+    // 6. Enviar email (opcional)
     enviarEmailAlCliente({ 
-      to: email, 
+      to: emailNormalizado, 
       plan: plan,
       monto: paymentInfo.transaction_amount
-    }).catch(error => {
-      console.error('✉️ Error enviando email:', error);
-    });
+    }).catch(error => console.error('✉️ Error enviando email:', error));
 
-    res.status(200).json({ success: true, email, plan });
+    res.status(200).json({ 
+  success: true, 
+  email: emailNormalizado, 
+  plan,
+  firestorePath: `usuarios/${emailNormalizado}`
+});
 
   } catch (error) {
     console.error('🔥 Error en webhook:', error);
@@ -258,22 +265,28 @@ async function enviarEmailAlCliente({ to, plan, monto }) {
 
 app.get('/api/usuario/:email/plan', async (req, res) => {
   try {
-    const email = decodeURIComponent(req.params.email);
+    const email = decodeURIComponent(req.params.email).toLowerCase(); // 👈 Normalización
     const userDoc = await db.collection('usuarios').doc(email).get();
 
     if (!userDoc.exists) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
+      return res.status(404).json({ 
+        error: 'Usuario no encontrado',
+        suggestion: 'Verifique que el webhook haya ejecutado correctamente'
+      });
     }
 
     const data = userDoc.data();
     res.status(200).json({
-      planAdquirido: data.planAdquirido || null,
-      ultimoPago: data.ultimoPago || null,
-      fechaActualizacion: data.fechaActualizacion || null,
+      planAdquirido: data?.planAdquirido || null,
+      ultimoPago: data?.ultimoPago || null,
+      active: data?.planAdquirido && data?.fechaActualizacion // 👈 Nuevo campo
     });
   } catch (error) {
-    console.error('Error al obtener el plan del usuario:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    console.error('Error al obtener el plan:', error);
+    res.status(500).json({ 
+      error: 'Error interno',
+      detalle: process.env.NODE_ENV !== 'production' ? error.message : null
+    });
   }
 });
 
