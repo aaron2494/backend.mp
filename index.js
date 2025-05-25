@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const MercadoPago = require('mercadopago');
-const nodemailer = require('nodemailer');
+
 const serviceAccount = require('./firebase-service-account.json');
 const admin = require('firebase-admin');
 
@@ -13,15 +13,6 @@ const mercadopago = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN,
   sandbox:true
 });
-
-// Asegúrate de tener inicializado Firebase Admin
-if (admin.apps.length === 0) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    databaseURL: "https://innovatech-f77d8.firebaseio.com"
-  });
-}
-const db = admin.firestore();
 
 const preference = new Preference(mercadopago);
 const payment = new Payment(mercadopago);
@@ -38,6 +29,31 @@ const corsOptions = {
     allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 };
+// Asegúrate de tener inicializado Firebase Admin
+// 1. Verificar si Firebase Admin ya está inicializado
+if (admin.apps.length === 0) {
+  try {
+    // 2. Configuración segura con variables de entorno
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: serviceAccount.project_id || process.env.FIREBASE_PROJECT_ID,
+        clientEmail: serviceAccount.client_email || process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: (serviceAccount.private_key || process.env.FIREBASE_PRIVATE_KEY).replace(/\\n/g, '\n')
+      }),
+      databaseURL: "https://innovatech-f77d8.firebaseio.com",
+      storageBucket: "innovatech-f77d8.appspot.com" // Añadido para mayor compatibilidad
+    });
+    
+    console.log('✅ Firebase Admin inicializado correctamente');
+  } catch (error) {
+    console.error('🔥 Error al inicializar Firebase Admin:', error);
+    process.exit(1); // Salir si no se puede inicializar Firebase
+  }
+}
+
+// 3. Obtener instancia de Firestore con configuración óptima
+const db = admin.firestore();
+
 app.use(express.urlencoded({ extended: true }));
 app.use(cors(corsOptions)); // CORS primero
 app.use(express.json());
@@ -81,6 +97,117 @@ app.post('/api/crear-preferencia', async (req, res) => {
   }
 });
 
+
+ app.post('/api/webhook', async (req, res) => {
+  const { type, data } = req.body;
+  console.log('📨 Webhook recibido. Tipo:', type, '| ID:', data?.id);
+
+  try {
+    // Validación básica
+    if (type !== 'payment') {
+      return res.status(200).json({ message: 'Evento no manejado' });
+    }
+
+    // Obtener detalles del pago
+    const paymentInfo = await obtenerDetallesPago(data.id);
+    
+    // Validar y procesar pago
+    const resultado = await procesarPagoFirestore(paymentInfo);
+    
+    res.status(200).json(resultado);
+  } catch (error) {
+    console.error('🔥 Error en webhook:', error);
+    res.status(500).json({ 
+      error: 'Error procesando webhook',
+      detalle: process.env.NODE_ENV !== 'production' ? error.message : null
+    });
+  }
+});
+
+// Funciones auxiliares
+async function obtenerDetallesPago(paymentId) {
+  if (process.env.NODE_ENV !== 'production' && paymentId === 'test-pago') {
+    return {
+      status: 'approved',
+      payer: { email: 'aaron.e.francolino@gmail.com' },
+      metadata: { plan: 'básico' },
+      external_reference: 'user::aaron.e.francolino@gmail.com::básico',
+      id: 'test-pago',
+      transaction_amount: 1000,
+      payment_method_id: 'account_money'
+    };
+  }
+  return (await payment.get({ id: paymentId })).body;
+}
+
+async function procesarPagoFirestore(paymentInfo) {
+  if (paymentInfo.status !== 'approved') {
+    throw new Error('Pago no aprobado');
+  }
+
+  const { email, plan } = extraerDatosPago(paymentInfo);
+  await guardarEnFirestore(db, email, plan, paymentInfo);
+  
+  return { success: true, email, plan };
+}
+
+function extraerDatosPago(paymentInfo) {
+  const externalRef = decodeURIComponent(paymentInfo.external_reference || '');
+  const [,, plan] = externalRef.split('::');
+  const email = (paymentInfo.payer?.email || '').toLowerCase().trim();
+
+  if (!email || !plan) {
+    throw new Error('Datos incompletos en el pago');
+  }
+
+  return { email, plan };
+}
+
+async function guardarEnFirestore(db, email, plan, paymentInfo) {
+  const userRef = db.collection('usuarios').doc(email);
+  const userData = {
+    planAdquirido: plan.toLowerCase(),
+    ultimoPago: {
+      id: paymentInfo.id,
+      monto: paymentInfo.transaction_amount,
+      metodo: paymentInfo.payment_method_id,
+      fecha: new Date().toISOString()
+    },
+    fechaActualizacion: new Date().toISOString(),
+    mpMetadata: paymentInfo.metadata
+  };
+
+  await userRef.set(userData, { merge: true });
+  console.log(`✅ Firestore actualizado para ${email}`);
+}
+
+app.get('/api/usuario/:email/plan', async (req, res) => {
+  try {
+    const email = decodeURIComponent(req.params.email).toLowerCase();
+    const userDoc = await db.collection('usuarios').doc(email).get();
+
+    if (!userDoc.exists) {
+      return res.status(404).json({ 
+        error: 'Usuario no encontrado',
+        suggestion: 'El pago aún no ha sido procesado o el email es incorrecto'
+      });
+    }
+
+    const data = userDoc.data();
+    res.status(200).json({
+      planAdquirido: data.planAdquirido,
+      ultimoPago: data.ultimoPago || null,
+      fechaActualizacion: data.fechaActualizacion,
+      active: !!data.planAdquirido
+    });
+  } catch (error) {
+    console.error('Error al obtener el plan:', error);
+    res.status(500).json({ 
+      error: 'Error interno',
+      detalle: process.env.NODE_ENV !== 'production' ? error.message : null
+    });
+  }
+});
 app.get('/api/ventas', async (req, res) => {
   try {
     const result = await payment.search({
@@ -137,156 +264,6 @@ app.get('/api/ventas', async (req, res) => {
       data: error.response?.data
     });
     res.status(500).json({ error: "Error al obtener ventas" });
-  }
-});
-app.post('/api/webhook', async (req, res) => {
-  const { type, data } = req.body;
-  console.log('📨 Webhook recibido. Tipo:', type, '| ID:', data?.id);
-
-  // 1. Validación básica
-  if (type !== 'payment') {
-    console.log('⚠️ Evento ignorado (no es payment)');
-    return res.status(200).json({ message: 'Evento no manejado' });
-  }
-
-  try {
-    // 2. Obtener detalles del pago
-    let paymentInfo;
-    const isTestPayment = process.env.NODE_ENV !== 'production' && data.id === 'test-pago';
-
-    if (isTestPayment) {
-      console.log('🔧 Usando datos de prueba');
-      paymentInfo = {
-        status: 'approved',
-        payer: { email: 'aaron.e.francolino@gmail.com' },
-        metadata: { plan: 'Premium' },
-        external_reference: 'user::aaron.e.francolino@gmail.com::Premium', // 👈 Simula tu front
-        id: 'test-pago',
-        transaction_amount: 1000,
-        payment_method_id: 'visa'
-      };
-    } else {
-      paymentInfo = (await mercadopago.payment.get({ id: data.id })).body;
-      console.log('💳 Datos reales del pago:', JSON.stringify(paymentInfo, null, 2));
-    }
-
-    // 3. Validar estado del pago
-    if (paymentInfo.status !== 'approved') {
-      console.log('❌ Pago no aprobado. Estado:', paymentInfo.status);
-      return res.status(200).json({ message: 'Pago no aprobado' });
-    }
-
-    // 4. Extraer datos clave
-    const externalRefParts = paymentInfo.external_reference?.split('::') || [];
-    const email = paymentInfo.payer?.email || paymentInfo.metadata?.email || externalRefParts[1];
-    const plan = paymentInfo.metadata?.plan || externalRefParts[2];
-
-    if (!email || !plan) {
-      console.error('❌ Datos faltantes:', { email, plan, external_reference: paymentInfo.external_reference });
-      throw new Error('Email o plan no encontrados en metadata/external_reference');
-    }
-
-    // 5. Guardar en Firestore
-    const emailNormalizado = email.trim().toLowerCase();
-    const userData = {
-      planAdquirido: plan.toLowerCase(),
-      ultimoPago: {
-        id: paymentInfo.id,
-        monto: paymentInfo.transaction_amount,
-        metodo: paymentInfo.payment_method_id,
-        fecha: new Date().toISOString()
-      },
-      fechaActualizacion: new Date().toISOString(),
-      mpMetadata: paymentInfo.metadata
-    };
-
-    console.log('💾 Guardando en Firestore:', emailNormalizado, userData);
-    await db.collection('usuarios').doc(emailNormalizado).set(userData, { merge: true });
-
-    // 6. Enviar email (opcional)
-    enviarEmailAlCliente({ 
-      to: emailNormalizado, 
-      plan: plan,
-      monto: paymentInfo.transaction_amount
-    }).catch(error => console.error('✉️ Error enviando email:', error));
-
-    res.status(200).json({ 
-  success: true, 
-  email: emailNormalizado, 
-  plan,
-  firestorePath: `usuarios/${emailNormalizado}`
-});
-
-  } catch (error) {
-    console.error('🔥 Error en webhook:', error);
-    res.status(500).json({ 
-      error: 'Error procesando webhook',
-      detalle: process.env.NODE_ENV !== 'production' ? error.message : null
-    });
-  }
-});
-
-// Función de email mejorada
-async function enviarEmailAlCliente({ to, plan, monto }) {
-  const planes = {
-    'basico': { descripcion: '...', precio: 1 },
-    'profesional': { descripcion: '...', precio: 2 },
-    'premium': { descripcion: '...', precio: 3 }
-  };
-
-  const planKey = plan.toLowerCase();
-  const info = planes[planKey] || { 
-    descripcion: 'Plan personalizado',
-    precio: monto || 0
-  };
-
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    }
-  });
-
-  await transporter.sendMail({
-    from: `innovatech<${process.env.EMAIL_USER}>`,
-    to,
-    subject: `✅ Confirmación de compra: Plan ${plan}`,
-    html: `
-      <div style="font-family: Poppins, sans-serif; color: #333; padding: 20px;">
-        <h2 style="color: #2c3e50;">¡Gracias por tu compra en innovatech!</h2>
-        <p>Has adquirido el <strong>Plan ${plan}</strong> por <strong>$${info.precio} ARS</strong>.</p>
-        <p>${info.descripcion}</p>
-        <p><small>ID de transacción: ${paymentInfo.id}</small></p>
-      </div>
-    `
-  });
-}
-
-app.get('/api/usuario/:email/plan', async (req, res) => {
-  try {
-    const email = decodeURIComponent(req.params.email).toLowerCase();
-    const userDoc = await db.collection('usuarios').doc(email).get();
-
-    if (!userDoc.exists) {
-      return res.status(404).json({ 
-        error: 'Usuario no encontrado',
-        suggestion: 'El webhook aún no ha procesado este pago'
-      });
-    }
-
-    const data = userDoc.data();
-    res.status(200).json({
-      planAdquirido: data?.planAdquirido || null,
-      ultimoPago: data?.ultimoPago || null,
-      active: data?.planAdquirido && data?.fechaActualizacion
-    });
-  } catch (error) {
-    console.error('Error al obtener el plan:', error);
-    res.status(500).json({ 
-      error: 'Error interno',
-      detalle: process.env.NODE_ENV !== 'production' ? error.message : null
-    });
   }
 });
 
