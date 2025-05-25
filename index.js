@@ -126,7 +126,7 @@ app.post('/api/crear-preferencia', async (req, res) => {
 
 // Funciones auxiliares
 async function obtenerDetallesPago(paymentId) {
-  if (process.env.NODE_ENV !== 'production' && paymentId === 'test-pago') {
+  if (paymentId === 'test-pago') {  // 👈 quitamos la condición de NODE_ENV
     return {
       status: 'approved',
       payer: { email: 'aaron.e.francolino@gmail.com' },
@@ -137,6 +137,7 @@ async function obtenerDetallesPago(paymentId) {
       payment_method_id: 'account_money'
     };
   }
+
   return (await payment.get({ id: paymentId })).body;
 }
 
