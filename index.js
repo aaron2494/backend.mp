@@ -181,7 +181,18 @@ async function guardarEnFirestore(db, email, plan, paymentInfo) {
   await userRef.set(userData, { merge: true });
   console.log(`✅ Firestore actualizado para ${email}`);
 }
+app.post('/api/activar-plan', async (req, res) => {
+  const { email, plan, pago } = req.body;
+  if (!email || !plan) return res.status(400).json({ error: 'Datos incompletos' });
 
+  try {
+    // Aquí llamás a tu función para guardar en Firestore
+    await guardarEnFirestore(db, email.toLowerCase(), plan.toLowerCase(), pago);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 app.get('/api/usuario/:email/plan', async (req, res) => {
   try {
     const email = decodeURIComponent(req.params.email).toLowerCase();
