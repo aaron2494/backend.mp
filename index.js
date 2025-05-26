@@ -5,14 +5,6 @@ const admin = require('firebase-admin');
 const { Preference } = require('mercadopago'); // ✅ Agrega esto
 const app = express();
 
-const corsOptions = {
-  origin: ['https://innovatexx.netlify.app', 'http://localhost:4200'],
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
-};
-
 
 // Firebase Admin Init
 const serviceAccount = require('./firebase-service-account.json'); // Tu clave
@@ -25,9 +17,14 @@ const db = admin.firestore();
 const mp = new mercadopago.MercadoPagoConfig({
   accessToken: 'APP_USR-8105204432976930-052515-307bb9efc331156241647febd01dce1e-1488503587'
 });
+const corsOptions = {
+  origin: ['https://innovatexx.netlify.app', 'http://localhost:4200'],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
+};
 app.use(cors(corsOptions));
-app.options('/create-preference', cors(corsOptions)); // Opcionalmente específico
-
 app.use(express.json());
 
 // Crear preferencia
@@ -47,9 +44,9 @@ app.post('/create-preference', async (req, res) => {
       }
     ],
     back_urls: {
-      success: `http://innovatexx.netlify.app/plan-${plan}`,
-      failure: `http://innovatexx.netlify.app`,
-      pending: `http://innovatexx.netlify.app`
+      success: `https://innovatexx.netlify.app/plan-${plan}`,
+      failure: `https://innovatexx.netlify.app`,
+      pending: `https://innovatexx.netlify.app`
     },
     auto_return: 'approved',
     metadata: {
