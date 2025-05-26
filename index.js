@@ -64,7 +64,7 @@ app.post('/create-preference', async (req, res) => {
   }
 });
 // Webhook de confirmación de pago
-app.post('/webhook', async (req, res) => {
+app.post('/api/webhook', async (req, res) => {
   const data = req.body;
 
   try {
