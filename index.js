@@ -28,7 +28,7 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 // Crear preferencia
-app.post('/create-preference', async (req, res) => {
+app.post('/api/create-preference', async (req, res) => {
   const { plan, userEmail } = req.body;
 
   const amount = plan === 'basico' ? 1 :
