@@ -1,12 +1,12 @@
 import express from 'express';
-import { Preference } from 'mercadopago/dist/clients/preference';
-import mp from './mercadoPago'; // tu instancia de MercadoPagoConfig
-import { initializeApp } from 'firebase-admin';
+import mp from './mercadoPago.js'; // tu instancia de MercadoPagoConfig
+import admin from 'firebase-admin';
 import { cert } from 'firebase-admin/app';
-import serviceAccount from '../firebase-service-account.json' assert { type: 'json' };
+import serviceAccount from '../firebase-service-account.json' with { type: 'json' };
 import { getFirestore } from 'firebase-admin/firestore';
+import { Preference } from 'mercadopago/dist/clients/preference/index.js';
 const router = express.Router();
-initializeApp({
+admin.initializeApp({
     credential: cert(serviceAccount),
 });
 const db = getFirestore();
