@@ -33,40 +33,44 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.post('/api/create-preference', async (req, res) => {
-  const { plan, userEmail } = req.body;
-
-  const amount = plan === 'basico' ? 1 :
-                 plan === 'profesional' ? 2 : 3;
-
-  const preferenceData = {
-    items: [
-      {
-        title: `Plan ${plan}`,
-        quantity: 1,
-        unit_price: amount,
-        currency_id: 'ARS'
-      }
-    ],
-    back_urls: {
-      success: `https://innovatexx.netlify.app/plan-${plan}`,
-      failure: `https://innovatexx.netlify.app`,
-      pending: `https://innovatexx.netlify.app`
-    },
-    auto_return: 'approved',
-    metadata: {
-      userEmail,
-      plan
-    }
-  };
-
   try {
-   const preference = await mercadopago.preferences.create(preferenceData);
-    res.json({ init_point: preference.init_point });
-  } catch (err) {
-    console.error('Error al crear preferencia:', err);
-    res.status(500).send('Error al crear preferencia');
+    const { plan, origen } = req.body;
+    const email = origen;
+
+    // Validación de campos requeridos
+    if (!plan?.nombre || !plan?.precio || !origen) {
+      return res.status(400).json({ 
+        error: 'Faltan datos requeridos',
+        detalles: {
+          requiere: {
+            plan: { nombre: 'string', precio: 'number' },
+            origen: 'string'
+          }
+        }
+      });
+    }
+
+    const result = await preference.create({
+      body: {
+       items: [{
+      title: plan.nombre,
+      unit_price: Number(plan.precio),
+      quantity: 1, // 👈 Este campo debe estar y debe ser > 0
+    }],
+        external_reference: `user::${email}::${plan.nombre.toLowerCase()}`,
+        metadata: { email, plan: plan.nombre }, // 👈 Añade metadata
+        back_urls: { success: 'https://innovatexx.netlify.app/pago-exitoso' },
+        auto_return: 'approved'
+      }
+    });
+
+    res.json({ preferenceId: result.id });
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: 'Error al crear preferencia' });
   }
 });
+
 // Webhook de confirmación de pago
 app.post('/api/webhook', async (req, res) => {
   const data = req.body;
