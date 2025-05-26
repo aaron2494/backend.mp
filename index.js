@@ -4,7 +4,7 @@ const mercadopago = require('mercadopago');
 const admin = require('firebase-admin');
 const app = express();
 
-app.use(cors());
+
 app.use(cors({
   origin: '*' // o '*' para todos
 }));
