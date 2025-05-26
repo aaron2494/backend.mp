@@ -34,10 +34,14 @@ if (admin.apps.length === 0) {
   }
 }
 
-
+  const corsOptions ={
+    origin:'https://verdant-brigadeiros-32ef4b.netlify.app', 
+    credentials:true,            //access-control-allow-credentials:true
+    optionSuccessStatus:200
+}
+  
 // Middlewares
-app.use(cors());
-app.options('/', cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 const db = admin.firestore();
 
