@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const app = express();
 const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
 const serviceAccount = require('./firebase-service-account.json');
 const admin = require('firebase-admin');
@@ -12,21 +13,7 @@ const mercadopago = new MercadoPagoConfig({
 });
 const preference = new Preference(mercadopago);
 const payment = new Payment(mercadopago);
-// Configuración del transporter de email
-const app = express();
 
-// 1. Configuración CORS debe ir PRIMERO
-const corsOptions = {
-  origin: [
-    'https://innovatexx.netlify.app',
-    'http://localhost:4200'
-  ],
-  methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-};
-// Asegúrate de tener inicializado Firebase Admin
-// 1. Verificar si Firebase Admin ya está inicializado
 if (admin.apps.length === 0) {
   try {
     // 2. Configuración segura con variables de entorno
@@ -48,11 +35,28 @@ if (admin.apps.length === 0) {
 }
 
 // 3. Obtener instancia de Firestore con configuración óptima
+
+app.use((req, res, next) => {
+  const allowedOrigins = ['https://innovatexx.netlify.app', 'http://localhost:4200'];
+  const origin = req.headers.origin;
+
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end(); // Respuesta para preflight
+  }
+
+  next();
+});
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 const db = admin.firestore();
 
-app.use(express.urlencoded({ extended: true }));
-app.use(cors(corsOptions)); // CORS primero
-app.use(express.json());
 // Crear preferencia
 app.post('/api/create-preference', async (req, res) => {
 
