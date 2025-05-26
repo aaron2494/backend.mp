@@ -1,31 +1,35 @@
 const express = require('express');
 const cors = require('cors');
-const { MercadoPagoConfig } = require('mercadopago');
+const MercadoPago = require('mercadopago');
 const admin = require('firebase-admin');
 
-const app = express();
+require('dotenv').config();
+const { MercadoPagoConfig } = MercadoPago;
 
-
-// Firebase Admin Init
 const serviceAccount = require('./firebase-service-account.json'); // Tu clave
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 const db = admin.firestore();
 
-
+// Configuración de Mercado Pago para producción
 const mercadopago = new MercadoPagoConfig({
-  accessToken: 'APP_USR-8105204432976930-052515-307bb9efc331156241647febd01dce1e-1488503587'
+  accessToken: process.env.MP_ACCESS_TOKEN
 });
+
+
+const app = express();
+
 const corsOptions = {
-  origin: ['https://innovatexx.netlify.app', 'http://localhost:4200'],
+  origin: 'https://innovatexx.netlify.app',
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
+  credentials: true
 };
 
+app.use(express.urlencoded({ extended: true }));
 app.use(cors(corsOptions));
+app.use(cors());
 app.use(express.json());
 // Crear preferencia
 app.post('/api/create-preference', async (req, res) => {
@@ -92,3 +96,42 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
