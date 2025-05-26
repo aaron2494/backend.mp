@@ -1,10 +1,9 @@
 const express = require('express');
 const cors = require('cors');
-const MercadoPago = require('mercadopago');
+const mercadopago = require('mercadopago');
 const admin = require('firebase-admin');
 
 require('dotenv').config();
-const { MercadoPagoConfig } = MercadoPago;
 
 const serviceAccount = require('./firebase-service-account.json'); // Tu clave
 admin.initializeApp({
@@ -13,8 +12,8 @@ admin.initializeApp({
 const db = admin.firestore();
 
 // Configuración de Mercado Pago para producción
-const mercadopago = new MercadoPagoConfig({
-  accessToken: process.env.MP_ACCESS_TOKEN
+mercadopago.configure({
+  access_token: process.env.MP_ACCESS_TOKEN
 });
 
 
@@ -26,12 +25,13 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 };
-
-app.use(express.urlencoded({ extended: true }));
+// Middlewares (usa cors UNA sola vez)
 app.use(cors(corsOptions));
-app.use(cors());
+
+// 2) Body parsers
 app.use(express.json());
-// Crear preferencia
+app.use(express.urlencoded({ extended: true }));
+
 app.post('/api/create-preference', async (req, res) => {
   const { plan, userEmail } = req.body;
 
@@ -60,7 +60,7 @@ app.post('/api/create-preference', async (req, res) => {
   };
 
   try {
-    const preference = await mercadopago.preferences.create({ body: preferenceData });
+   const preference = await mercadopago.preferences.create(preferenceData);
     res.json({ init_point: preference.init_point });
   } catch (err) {
     console.error('Error al crear preferencia:', err);
