@@ -25,6 +25,7 @@ const mp = new mercadopago.MercadoPagoConfig({
   accessToken: 'APP_USR-8105204432976930-052515-307bb9efc331156241647febd01dce1e-1488503587'
 });
 app.use(cors(corsOptions));
+app.use(cors());
 app.use(express.json());
 
 // Crear preferencia
