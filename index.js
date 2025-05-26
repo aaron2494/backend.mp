@@ -55,7 +55,6 @@ const corsOptions = {
 // Middlewares
 app.use(cors(corsOptions));
 app.use(express.json());
-app.options('/', cors(corsOptions));
 const db = admin.firestore();
 
 // Crear preferencia
