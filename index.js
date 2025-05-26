@@ -36,6 +36,7 @@ if (admin.apps.length === 0) {
 const allowedOrigins = [
   'https://verdant-brigadeiros-32ef4b.netlify.app',
   'http://localhost:4200',
+   'https://backend-mp-g3mr.vercel.app'
 ];
 // 3. Obtener instancia de Firestore con configuración óptima
 const corsOptions = {
