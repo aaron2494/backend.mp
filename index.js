@@ -1,8 +1,8 @@
 const express = require('express');
 const cors = require('cors');
-const mercadopago = require('mercadopago');
+const { MercadoPagoConfig } = require('mercadopago');
 const admin = require('firebase-admin');
-const { Preference } = require('mercadopago'); // ✅ Agrega esto
+
 const app = express();
 
 
@@ -14,7 +14,7 @@ admin.initializeApp({
 const db = admin.firestore();
 
 
-const mp = new mercadopago.MercadoPagoConfig({
+const mercadopago = new MercadoPagoConfig({
   accessToken: 'APP_USR-8105204432976930-052515-307bb9efc331156241647febd01dce1e-1488503587'
 });
 const corsOptions = {
@@ -24,9 +24,9 @@ const corsOptions = {
   credentials: true,
   optionsSuccessStatus: 200 // Some legacy browsers choke on 204
 };
+
 app.use(cors(corsOptions));
 app.use(express.json());
-
 // Crear preferencia
 app.post('/api/create-preference', async (req, res) => {
   const { plan, userEmail } = req.body;
@@ -56,7 +56,7 @@ app.post('/api/create-preference', async (req, res) => {
   };
 
   try {
-    const preference = await new Preference(mp).create({ body: preferenceData });
+    const preference = await mercadopago.preferences.create({ body: preferenceData });
     res.json({ init_point: preference.init_point });
   } catch (err) {
     console.error('Error al crear preferencia:', err);
