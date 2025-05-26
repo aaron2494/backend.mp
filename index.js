@@ -33,66 +33,64 @@ if (admin.apps.length === 0) {
     process.exit(1); // Salir si no se puede inicializar Firebase
   }
 }
-
+const allowedOrigins = [
+  'https://innovatexx.netlify.app',
+  'http://localhost:4200',
+  'https://tu-frontend.vercel.app' // Agrega aquí tu dominio de frontend en producción
+];
 // 3. Obtener instancia de Firestore con configuración óptima
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 200 // Para legacy browsers
+};
 
-app.use((req, res, next) => {
-  const allowedOrigins = ['https://innovatexx.netlify.app', 'http://localhost:4200'];
-  const origin = req.headers.origin;
-
-  if (allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.header('Access-Control-Allow-Credentials', 'true');
-  }
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end(); // Respuesta para preflight
-  }
-
-  next();
-});
-app.use(express.urlencoded({ extended: true }));
+// Middlewares
+app.use(cors(corsOptions));
 app.use(express.json());
+
 const db = admin.firestore();
 
 // Crear preferencia
 app.post('/api/create-preference', async (req, res) => {
-
-   const { plan, userEmail } = req.body;
-
-  const amount = plan === 'basico' ? 1 :
-                 plan === 'profesional' ? 2 : 3;
-
-  const preferenceData = {
+const { plan, userEmail } = req.body;
+  
+  // Aquí tu lógica con MercadoPago...
+  const preference = {
     items: [
       {
         title: `Plan ${plan}`,
+        unit_price: getPlanPrice(plan),
         quantity: 1,
-        unit_price: amount,
-        currency_id: 'ARS'
-          }
-       ],
-    back_urls: {
-      success: `https://innovatexx.netlify.app/plan-${plan}`,
-      failure: `https://innovatexx.netlify.app`,
-      pending: `https://innovatexx.netlify.app`
+      }
+    ],
+    payer: {
+      email: userEmail
     },
-    auto_return: 'approved',
-    metadata: {
-      userEmail,
-      plan
-    }
+    back_urls: {
+      success: 'https://innovatexx.netlify.app',
+    },
+    auto_return: 'approved'
   };
-  try {
-    const result = await preference.create({ body: preferenceData });
-    res.json({ init_point: result.init_point });
-  } catch (err) {
-    console.error('Error al crear preferencia:', err);
-    res.status(500).send('Error al crear preferencia');
-  }
+
+  // Devuelve la respuesta que espera el frontend
+  res.json({
+    init_point: 'https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=123' // Ejemplo
+  });
 });
+
+function getPlanPrice(plan) {
+  const prices = { basico: 1, profesional: 2, premium: 3 };
+  return prices[plan] || 1;
+}
 
 
 app.post('/api/webhook', async (req, res) => {
