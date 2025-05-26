@@ -5,6 +5,9 @@ const admin = require('firebase-admin');
 const app = express();
 
 app.use(cors());
+app.use(cors({
+  origin: '*' // o '*' para todos
+}));
 app.use(express.json());
 
 // Firebase Admin Init
