@@ -1,0 +1,66 @@
+import express from 'express';
+import { Preference } from 'mercadopago/dist/clients/preference';
+import mp from './mercadoPago'; // tu instancia de MercadoPagoConfig
+import { initializeApp } from 'firebase-admin';
+import { cert } from 'firebase-admin/app';
+import serviceAccount from '../firebase-service-account.json' assert { type: 'json' };
+import { getFirestore } from 'firebase-admin/firestore';
+const router = express.Router();
+initializeApp({
+    credential: cert(serviceAccount),
+});
+const db = getFirestore();
+router.post('/create-preference', async (req, res) => {
+    const { plan, userEmail } = req.body;
+    const price = plan === 'basico' ? 1 : plan === 'profesional' ? 2 : 3;
+    const preference = new Preference(mp); // 👈 se instancia directamente el recurso Preference
+    try {
+        const result = await preference.create({
+            body: {
+                items: [
+                    {
+                        id: `plan-${plan}`,
+                        title: `Plan ${plan}`,
+                        quantity: 1,
+                        unit_price: price,
+                    },
+                ],
+                back_urls: {
+                    success: `${process.env.FRONTEND_URL}/planes?plan=${plan}`,
+                    failure: `${process.env.FRONTEND_URL}/planes`,
+                },
+                auto_return: 'approved',
+                metadata: {
+                    userEmail,
+                    plan,
+                },
+            },
+        });
+        res.json({ init_point: result.init_point });
+    }
+    catch (error) {
+        console.error('Error al crear preferencia:', error);
+        res.status(500).json({ error: 'No se pudo crear la preferencia' });
+    }
+});
+router.post('/webhook', express.json(), async (req, res) => {
+    try {
+        const payment = req.body;
+        const metadata = payment.data?.metadata;
+        if (!metadata)
+            res.sendStatus(400);
+        ;
+        await db.collection('usuarios').doc(metadata.userEmail).set({
+            email: metadata.userEmail,
+            plan: metadata.plan,
+            paid: true,
+            timestamp: new Date(),
+        });
+        res.sendStatus(200);
+    }
+    catch (error) {
+        console.error('Error en webhook', error);
+        res.sendStatus(500);
+    }
+});
+export default router;
