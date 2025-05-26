@@ -4,10 +4,18 @@ const mercadopago = require('mercadopago');
 const admin = require('firebase-admin');
 const app = express();
 
-
-app.use(cors({
-  origin: '*' // o '*' para todos
-}));
+const corsOptions = {
+  origin: [
+    'https://innovatexx.netlify.app',
+    'http://localhost:4200'
+  ],
+  origin: 'https://innovatexx.netlify.app',
+  methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Firebase Admin Init
