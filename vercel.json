@@ -6,13 +6,6 @@
       "use": "@vercel/node"
     }
   ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/index.js",
-      "methods": ["GET", "POST", "OPTIONS", "PUT", "DELETE"]
-    }
-  ],
   "headers": [
     {
       "source": "/api/(.*)",
