@@ -34,7 +34,7 @@ if (admin.apps.length === 0) {
   }
 }
 const allowedOrigins = [
-  'https://verdant-brigadeiros-32ef4b.netlify.app/',
+  'https://verdant-brigadeiros-32ef4b.netlify.app',
   'http://localhost:4200',
 ];
 // 3. Obtener instancia de Firestore con configuración óptima
