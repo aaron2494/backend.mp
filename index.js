@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const mercadopago = require('mercadopago');
 const admin = require('firebase-admin');
+const { Preference } = require('mercadopago'); // ✅ Agrega esto
 const app = express();
 
 const corsOptions = {
@@ -25,7 +26,8 @@ const mp = new mercadopago.MercadoPagoConfig({
   accessToken: 'APP_USR-8105204432976930-052515-307bb9efc331156241647febd01dce1e-1488503587'
 });
 app.use(cors(corsOptions));
-app.use(cors());
+app.options('/create-preference', cors(corsOptions)); // Opcionalmente específico
+
 app.use(express.json());
 
 // Crear preferencia
