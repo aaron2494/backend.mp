@@ -5,18 +5,13 @@ const admin = require('firebase-admin');
 const app = express();
 
 const corsOptions = {
-  origin: [
-    'https://innovatexx.netlify.app',
-    'http://localhost:4200'
-  ],
-  origin: 'https://innovatexx.netlify.app',
+  origin: ['https://innovatexx.netlify.app', 'http://localhost:4200'],
   methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  credentials: true,
+  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
 };
-app.use(cors(corsOptions));
-app.use(express.json());
+
 
 // Firebase Admin Init
 const serviceAccount = require('./firebase-service-account.json'); // Tu clave
@@ -29,6 +24,9 @@ const db = admin.firestore();
 const mp = new mercadopago.MercadoPagoConfig({
   accessToken: 'APP_USR-8105204432976930-052515-307bb9efc331156241647febd01dce1e-1488503587'
 });
+app.use(cors(corsOptions));
+app.use(express.json());
+
 // Crear preferencia
 app.post('/create-preference', async (req, res) => {
   const { plan, userEmail } = req.body;
