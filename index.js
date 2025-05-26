@@ -33,29 +33,11 @@ if (admin.apps.length === 0) {
     process.exit(1); // Salir si no se puede inicializar Firebase
   }
 }
-const allowedOrigins = [
-  'https://verdant-brigadeiros-32ef4b.netlify.app',
-  'http://localhost:4200',
-  
-];
-// 3. Obtener instancia de Firestore con configuración óptima
-const corsOptions = {
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-  optionsSuccessStatus: 200 // Para legacy browsers
-};
+
 
 // Middlewares
-app.use(cors(corsOptions));
-app.options('/api/create-preference', cors(corsOptions)); 
+app.use(cors());
+app.options('/', cors());
 app.use(express.json());
 const db = admin.firestore();
 
