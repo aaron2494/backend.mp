@@ -11,28 +11,7 @@ require('dotenv').config();
 const mercadopago = new MercadoPagoConfig({
   accessToken: 'APP_USR-8105204432976930-052515-307bb9efc331156241647febd01dce1e-1488503587',
 });
-const preference = new Preference(mercadopago);
-const payment = new Payment(mercadopago);
 
-if (admin.apps.length === 0) {
-  try {
-    // 2. Configuración segura con variables de entorno
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: serviceAccount.project_id || process.env.FIREBASE_PROJECT_ID,
-        clientEmail: serviceAccount.client_email || process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: (serviceAccount.private_key || process.env.FIREBASE_PRIVATE_KEY).replace(/\\n/g, '\n')
-      }),
-      databaseURL: "https://innovatech-f77d8.firebaseio.com",
-      storageBucket: "innovatech-f77d8.appspot.com" // Añadido para mayor compatibilidad
-    });
-    
-    console.log('✅ Firebase Admin inicializado correctamente');
-  } catch (error) {
-    console.error('🔥 Error al inicializar Firebase Admin:', error);
-    process.exit(1); // Salir si no se puede inicializar Firebase
-  }
-}
 const allowedOrigins = [
   'https://verdant-brigadeiros-32ef4b.netlify.app',
   'http://localhost:4200',
@@ -55,6 +34,7 @@ const corsOptions = {
 
 // Middlewares
 app.use(cors(corsOptions));
+app.options('/api/create-preference', cors(corsOptions));
 app.use(express.json());
 const db = admin.firestore();
 
@@ -137,8 +117,4 @@ app.post('/api/webhook', async (req, res) => {
   }
 });
 
-
-  app.listen(3000, () => {
-  console.log('Servidor backend escuchando en http://localhost:3000');
-});
 module.exports = app;
