@@ -1,36 +1,29 @@
 const express = require('express');
 const cors = require('cors');
 const MercadoPago = require('mercadopago');
-
-const serviceAccount = require('./firebase-service-account.json');
 const admin = require('firebase-admin');
-
 require('dotenv').config();
-
+const serviceAccount = require('./firebase-service-account.json');
 const { MercadoPagoConfig, Preference, Payment } = MercadoPago;
 
+// Configuración de Mercado Pago para producción
 const mercadopago = new MercadoPagoConfig({
-  accessToken: process.env.MP_ACCESS_TOKEN,
-  sandbox:true
+  accessToken: process.env.MP_ACCESS_TOKEN
 });
 
 const preference = new Preference(mercadopago);
 const payment = new Payment(mercadopago);
-// Configuración del transporter de email
 const app = express();
 
-// 1. Configuración CORS debe ir PRIMERO
+// Configuración CORS para producción
 const corsOptions = {
-  origin: [
-    'https://innovatexx.netlify.app',
-    'http://localhost:4200'
-  ],
+  origin: 'https://innovatexx.netlify.app',
   methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 };
-// Asegúrate de tener inicializado Firebase Admin
-// 1. Verificar si Firebase Admin ya está inicializado
+
+// Inicialización de Firebase Admin
 if (admin.apps.length === 0) {
   try {
     // 2. Configuración segura con variables de entorno
@@ -55,36 +48,30 @@ if (admin.apps.length === 0) {
 const db = admin.firestore();
 
 app.use(express.urlencoded({ extended: true }));
-app.use(cors(corsOptions)); // CORS primero
+app.use(cors(corsOptions));
 app.use(express.json());
-// Crear preferencia
+
+// Endpoint para crear preferencia de pago
 app.post('/api/crear-preferencia', async (req, res) => {
   try {
     const { plan, origen } = req.body;
     const email = origen;
 
-    // Validación de campos requeridos
     if (!plan?.nombre || !plan?.precio || !origen) {
       return res.status(400).json({ 
-        error: 'Faltan datos requeridos',
-        detalles: {
-          requiere: {
-            plan: { nombre: 'string', precio: 'number' },
-            origen: 'string'
-          }
-        }
+        error: 'Faltan datos requeridos: plan (nombre, precio) y origen'
       });
     }
 
     const result = await preference.create({
       body: {
-       items: [{
-      title: plan.nombre,
-      unit_price: Number(plan.precio),
-      quantity: 1, // 👈 Este campo debe estar y debe ser > 0
-    }],
+        items: [{
+          title: plan.nombre,
+          unit_price: Number(plan.precio),
+          quantity: 1,
+        }],
         external_reference: `user::${email}::${plan.nombre.toLowerCase()}`,
-        metadata: { email, plan: plan.nombre }, // 👈 Añade metadata
+        metadata: { email, plan: plan.nombre },
         back_urls: { success: 'https://innovatexx.netlify.app/pago-exitoso' },
         auto_return: 'approved'
       }
@@ -92,163 +79,107 @@ app.post('/api/crear-preferencia', async (req, res) => {
 
     res.json({ preferenceId: result.id });
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ error: 'Error al crear preferencia' });
+    console.error('Error al crear preferencia:', error);
+    res.status(500).json({ error: 'Error al crear preferencia de pago' });
   }
 });
 
-
+// Webhook para procesar pagos
 app.post('/api/webhook', async (req, res) => {
+  console.log('🔔 Webhook recibido - Headers:', req.headers);
+  console.log('🔔 Webhook recibido - Body:', JSON.stringify(req.body, null, 2));
+  
   const { type, data } = req.body;
-  console.log('📨 Webhook recibido. Tipo:', type, '| ID:', data?.id);
 
   try {
-    // 1. Validación básica
-    if (type !== 'payment') {
-      console.log('⚠️ Evento ignorado (no es payment)');
+    if (type !== 'payment' || !data?.id) {
+      console.log('⚠️ Webhook ignorado - Tipo:', type, 'ID:', data?.id);
       return res.status(200).json({ message: 'Evento no manejado' });
     }
 
-    if (!data?.id) {
-      throw new Error('ID de pago no proporcionado en el webhook');
-    }
+    const paymentInfo = await obtenerDetallesPago(data.id);
+    console.log('💰 Pago obtenido:', {
+      id: paymentInfo.id,
+      status: paymentInfo.status,
+      amount: paymentInfo.transaction_amount,
+      method: paymentInfo.payment_method_id
+    });
 
-    // 2. Obtener detalles del pago con manejo de errores mejorado
-    let paymentInfo;
-    try {
-      paymentInfo = await obtenerDetallesPago(data.id);
-      console.log('💳 Datos del pago obtenidos:', { 
-        id: paymentInfo.id, 
-        status: paymentInfo.status 
-      });
-    } catch (error) {
-      console.error('Error al obtener detalles del pago:', error);
-      throw new Error('No se pudieron obtener los detalles del pago desde Mercado Pago');
-    }
-
-    // 3. Validar y procesar pago
     const resultado = await procesarPagoFirestore(paymentInfo);
-    
     res.status(200).json(resultado);
   } catch (error) {
     console.error('🔥 Error en webhook:', {
       message: error.message,
-      stack: error.stack,
-      requestBody: req.body
+      paymentId: data?.id,
+      timestamp: new Date().toISOString()
     });
-    res.status(500).json({ 
-      error: 'Error procesando webhook',
-      detalle: process.env.NODE_ENV !== 'production' ? error.message : null
-    });
+    res.status(500).json({ error: 'Error procesando pago' });
   }
 });
 
-// Funciones auxiliares mejoradas
+// Funciones auxiliares
 async function obtenerDetallesPago(paymentId) {
-  // 1. Primero verificar si es un pago de prueba
-  if (paymentId === 'test-pago') {
-    console.log('🔧 Usando datos de prueba');
-    return {
-      status: 'approved',
-      payer: { email: 'aaron.e.francolino@gmail.com' },
-      metadata: { plan: 'básico' },
-      external_reference: 'user::aaron.e.francolino@gmail.com::básico',
-      id: 'test-pago',
-      transaction_amount: 1000,
-      payment_method_id: 'account_money'
-    };
-  }
-
-  // 2. Obtener datos reales de Mercado Pago
   try {
     const response = await payment.get({ id: paymentId });
+    
     if (!response || !response.body) {
-      throw new Error('Respuesta vacía de la API de Mercado Pago');
+      console.log('🔄 Reintentando obtener pago...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const retryResponse = await payment.get({ id: paymentId });
+      if (!retryResponse || !retryResponse.body) {
+        throw new Error('No se pudo obtener información del pago después de reintento');
+      }
+      return retryResponse.body;
     }
     return response.body;
   } catch (error) {
-    console.error('Error al obtener pago de Mercado Pago:', {
+    console.error('Error al obtener pago:', {
       paymentId,
-      error: error.response?.data || error.message
+      error: error.message,
+      timestamp: new Date().toISOString()
     });
     throw error;
   }
 }
 
 async function procesarPagoFirestore(paymentInfo) {
-  // Validación robusta del objeto paymentInfo
-  if (!paymentInfo || typeof paymentInfo !== 'object') {
-    throw new Error('Datos de pago inválidos');
-  }
-
-  if (paymentInfo.status !== 'approved') {
-    console.log('❌ Pago no aprobado. Estado:', paymentInfo.status);
-    throw new Error('Pago no aprobado');
+  if (!paymentInfo || paymentInfo.status !== 'approved') {
+    throw new Error(`Estado de pago inválido: ${paymentInfo?.status}`);
   }
 
   const { email, plan } = extraerDatosPago(paymentInfo);
-  await guardarEnFirestore(db, email, plan, paymentInfo);
   
-  return { 
-    success: true, 
-    email, 
-    plan,
-    paymentId: paymentInfo.id 
+  const userData = {
+    planAdquirido: plan.toLowerCase(),
+    ultimoPago: {
+      id: paymentInfo.id,
+      monto: paymentInfo.transaction_amount,
+      metodo: paymentInfo.payment_method_id,
+      fecha: new Date().toISOString()
+    },
+    fechaActualizacion: new Date().toISOString()
   };
+
+  await db.collection('usuarios').doc(email).set(userData, { merge: true });
+  console.log(`✅ Usuario actualizado: ${email} - Plan: ${plan}`);
+  
+  return { success: true, email, plan, paymentId: paymentInfo.id };
 }
 
 function extraerDatosPago(paymentInfo) {
-  try {
-    const externalRef = decodeURIComponent(paymentInfo.external_reference || '');
-    const [,, plan] = externalRef.split('::');
-    const email = (paymentInfo.payer?.email || '').toLowerCase().trim();
+  const externalRef = paymentInfo.external_reference || '';
+  const [,, plan] = externalRef.split('::');
+  const email = (paymentInfo.payer?.email || '').toLowerCase().trim();
 
-    if (!email || !plan) {
-      console.error('❌ Datos faltantes en el pago:', {
-        external_reference: paymentInfo.external_reference,
-        payer: paymentInfo.payer
-      });
-      throw new Error('Datos incompletos en el pago (email o plan faltante)');
-    }
-
-    return { email, plan };
-  } catch (error) {
-    console.error('Error al extraer datos del pago:', {
-      paymentInfo,
-      error: error.message
+  if (!email || !plan) {
+    console.error('❌ Datos faltantes en pago:', {
+      external_reference: externalRef,
+      payer: paymentInfo.payer
     });
-    throw new Error('Formato de datos de pago inválido');
+    throw new Error('Datos incompletos en el pago');
   }
-}
 
-async function guardarEnFirestore(db, email, plan, paymentInfo) {
-  try {
-    const userRef = db.collection('usuarios').doc(email);
-    const userData = {
-      planAdquirido: plan.toLowerCase(),
-      ultimoPago: {
-        id: paymentInfo.id,
-        monto: paymentInfo.transaction_amount,
-        metodo: paymentInfo.payment_method_id,
-        fecha: new Date().toISOString()
-      },
-      fechaActualizacion: new Date().toISOString(),
-      mpMetadata: paymentInfo.metadata || {}
-    };
-
-    await userRef.set(userData, { merge: true });
-    console.log(`✅ Firestore actualizado para ${email}`, { 
-      plan: plan.toLowerCase(),
-      paymentId: paymentInfo.id 
-    });
-  } catch (error) {
-    console.error('Error al guardar en Firestore:', {
-      email,
-      plan,
-      error: error.message
-    });
-    throw new Error('Error al actualizar la base de datos');
-  }
+  return { email, plan };
 }
 app.post('/api/activar-plan', async (req, res) => {
   const { email, plan, pago } = req.body;
@@ -262,31 +193,20 @@ app.post('/api/activar-plan', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+// Endpoint para verificar plan de usuario
 app.get('/api/usuario/:email/plan', async (req, res) => {
   try {
     const email = decodeURIComponent(req.params.email).toLowerCase();
     const userDoc = await db.collection('usuarios').doc(email).get();
 
     if (!userDoc.exists) {
-      return res.status(404).json({ 
-        error: 'Usuario no encontrado',
-        suggestion: 'El pago aún no ha sido procesado o el email es incorrecto'
-      });
+      return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    const data = userDoc.data();
-    res.status(200).json({
-      planAdquirido: data.planAdquirido,
-      ultimoPago: data.ultimoPago || null,
-      fechaActualizacion: data.fechaActualizacion,
-      active: !!data.planAdquirido
-    });
+    res.status(200).json(userDoc.data());
   } catch (error) {
-    console.error('Error al obtener el plan:', error);
-    res.status(500).json({ 
-      error: 'Error interno',
-      detalle: process.env.NODE_ENV !== 'production' ? error.message : null
-    });
+    console.error('Error al obtener plan:', error);
+    res.status(500).json({ error: 'Error interno' });
   }
 });
 app.get('/api/ventas', async (req, res) => {
@@ -347,8 +267,14 @@ app.get('/api/ventas', async (req, res) => {
     res.status(500).json({ error: "Error al obtener ventas" });
   }
 });
-
-  app.listen(3000, () => {
-  console.log('Servidor backend escuchando en http://localhost:3000');
+// Iniciar servidor
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor en producción escuchando en puerto ${PORT}`);
 });
+
 module.exports = app;
+
+
+
+
