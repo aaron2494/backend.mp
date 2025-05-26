@@ -34,9 +34,8 @@ if (admin.apps.length === 0) {
   }
 }
 const allowedOrigins = [
-  'https://innovatexx.netlify.app',
+  'https://verdant-brigadeiros-32ef4b.netlify.app/',
   'http://localhost:4200',
-  'https://tu-frontend.vercel.app' // Agrega aquí tu dominio de frontend en producción
 ];
 // 3. Obtener instancia de Firestore con configuración óptima
 const corsOptions = {
@@ -76,7 +75,7 @@ const { plan, userEmail } = req.body;
       email: userEmail
     },
     back_urls: {
-      success: 'https://innovatexx.netlify.app',
+      success: 'https://verdant-brigadeiros-32ef4b.netlify.app',
     },
     auto_return: 'approved'
   };
