@@ -7,7 +7,18 @@ import routes from './routes.js';
 dotenv.config();
 
 const app = express();
-app.use(cors({ origin: true, credentials: true }));
+const allowedOrigins = ['https://innovatexx.netlify.app'];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use('/api', routes);
 
