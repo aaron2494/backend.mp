@@ -6,9 +6,11 @@ import serviceAccount from '../firebase-service-account.json' with { type: 'json
 import { getFirestore } from 'firebase-admin/firestore';
 import { Preference } from 'mercadopago/dist/clients/preference/index.js';
 const router = express.Router();
-admin.initializeApp({
-    credential: cert(serviceAccount),
-});
+if (!admin.apps.length) {
+    admin.initializeApp({
+        credential: cert(serviceAccount),
+    });
+}
 const db = getFirestore();
 router.post('/create-preference', async (req, res) => {
     const { plan, userEmail } = req.body;
