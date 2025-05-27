@@ -70,6 +70,7 @@ router.post('/create-preference', async (req, res) => {
 
 // 📩 Webhook de confirmación de pago
 router.post('/webhook', express.json(), async (req, res) => {
+  console.log('Webhook body:', req.body);
   try {
     const paymentId = req.body?.data?.id;
 
@@ -90,8 +91,9 @@ router.post('/webhook', express.json(), async (req, res) => {
 
     const metadata = payment?.metadata;
 
-    const rawEmail = metadata.userEmail || metadata.user_email;
-
+    const rawEmail = metadata.userEmail || metadata.user_email || metadata.email;
+console.log('Payment metadata:', metadata); // Agrega esto antes de la validación
+console.log('Raw email:', rawEmail); // Verifica qué valor está obteniendo
 if (
   !rawEmail ||
   typeof rawEmail !== 'string' ||
