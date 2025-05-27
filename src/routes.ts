@@ -75,13 +75,16 @@ router.post('/webhook', express.json(), async (req, res) => {
 
     if (!paymentId) {
       console.error('❌ paymentId ausente en el webhook');
-      res.sendStatus(400);
+       res.sendStatus(400);
     }
 
     const paymentClient = new Payment(mp);
     const payment = await paymentClient.get({ id: paymentId });
 
-    console.log('✅ Pago recibido:', payment);
+    if (!payment) {
+      console.error('❌ No se pudo obtener el pago desde la API de MP');
+       res.sendStatus(404);
+    }
 
     const metadata = payment?.metadata;
 
@@ -92,7 +95,7 @@ router.post('/webhook', express.json(), async (req, res) => {
       metadata.userEmail.trim() === ''
     ) {
       console.error('❌ Metadata incompleta o email inválido:', metadata);
-       res.sendStatus(400);
+       res.sendStatus(200); // Respondé 200 para evitar retries infinitos
     }
 
     const email = metadata.userEmail.trim();
@@ -106,10 +109,11 @@ router.post('/webhook', express.json(), async (req, res) => {
     });
 
     console.log('✅ Usuario guardado en Firestore:', email);
-    res.sendStatus(200);
+     res.sendStatus(200);
+
   } catch (error) {
     console.error('❌ Error en webhook:', error);
-    res.sendStatus(500);
+     res.sendStatus(500);
   }
 });
 

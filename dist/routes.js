@@ -1,21 +1,35 @@
 import express from 'express';
-import mp from './mercadoPago.js'; // tu instancia de MercadoPagoConfig
+import mp from './mercadoPago.js'; // instancia de MercadoPagoConfig
 import admin from 'firebase-admin';
 import { cert } from 'firebase-admin/app';
 import serviceAccount from '../firebase-service-account.json' with { type: 'json' };
 import { getFirestore } from 'firebase-admin/firestore';
 import { Preference } from 'mercadopago/dist/clients/preference/index.js';
+import { Payment } from 'mercadopago/dist/clients/payment/index.js';
 const router = express.Router();
+// 🔐 Inicializa Firebase solo si no está ya inicializado
 if (!admin.apps.length) {
     admin.initializeApp({
         credential: cert(serviceAccount),
     });
 }
 const db = getFirestore();
+// 🎯 Crear preferencia de pago
 router.post('/create-preference', async (req, res) => {
     const { plan, userEmail } = req.body;
-    const price = plan === 'basico' ? 1 : plan === 'profesional' ? 2 : 3;
-    const preference = new Preference(mp); // 👈 se instancia directamente el recurso Preference
+    if (!plan || !userEmail) {
+        res.status(400).json({ error: 'Faltan datos requeridos (plan o email)' });
+    }
+    const priceMap = {
+        basico: 1,
+        profesional: 2,
+        premium: 3,
+    };
+    const price = priceMap[plan];
+    if (!price) {
+        res.status(400).json({ error: 'Plan no válido' });
+    }
+    const preference = new Preference(mp);
     try {
         const result = await preference.create({
             body: {
@@ -41,11 +55,11 @@ router.post('/create-preference', async (req, res) => {
         res.json({ init_point: result.init_point });
     }
     catch (error) {
-        console.error('Error al crear preferencia:', error);
+        console.error('❌ Error al crear preferencia:', error);
         res.status(500).json({ error: 'No se pudo crear la preferencia' });
     }
 });
-import { Payment } from 'mercadopago/dist/clients/payment/index.js';
+// 📩 Webhook de confirmación de pago
 router.post('/webhook', express.json(), async (req, res) => {
     try {
         const paymentId = req.body?.data?.id;
@@ -55,11 +69,17 @@ router.post('/webhook', express.json(), async (req, res) => {
         }
         const paymentClient = new Payment(mp);
         const payment = await paymentClient.get({ id: paymentId });
-        console.log('✅ Pago recibido:', payment);
+        if (!payment) {
+            console.error('❌ No se pudo obtener el pago desde la API de MP');
+            res.sendStatus(404);
+        }
         const metadata = payment?.metadata;
-        if (!metadata || !metadata.userEmail || typeof metadata.userEmail !== 'string' || metadata.userEmail.trim() === '') {
-            console.error('❌ Metadata incompleta o email vacío:', metadata);
-            res.sendStatus(400);
+        if (!metadata ||
+            !metadata.userEmail ||
+            typeof metadata.userEmail !== 'string' ||
+            metadata.userEmail.trim() === '') {
+            console.error('❌ Metadata incompleta o email inválido:', metadata);
+            res.sendStatus(200); // Respondé 200 para evitar retries infinitos
         }
         const email = metadata.userEmail.trim();
         const plan = metadata.plan ?? 'desconocido';
