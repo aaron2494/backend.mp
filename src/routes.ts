@@ -70,44 +70,50 @@ router.post('/create-preference', async (req, res) => {
 
 // 📩 Webhook de confirmación de pago
 router.post('/webhook', express.json(), async (req, res) => {
-  console.log('Webhook body:', req.body);
+  console.log('🔔 Webhook recibido. Body:', req.body);
+
   try {
     const paymentId = req.body?.data?.id;
 
     if (!paymentId) {
       console.error('❌ paymentId ausente en el webhook');
-       res.sendStatus(400);
-       return;
+      res.sendStatus(400);
+      return ;
     }
 
+    // Inicializa cliente de Mercado Pago y busca el pago
     const paymentClient = new Payment(mp);
-    const payment = await paymentClient.get({ id: paymentId });
+    const paymentResponse = await paymentClient.get({ id: paymentId });
 
-    if (!payment) {
-      console.error('❌ No se pudo obtener el pago desde la API de MP');
+    if (!paymentResponse) {
+      console.error('❌ No se pudo obtener el pago desde la API de Mercado Pago');
        res.sendStatus(404);
        return;
     }
 
-    const metadata = payment?.metadata;
+      const payment = (paymentResponse as any).body || paymentResponse;
 
+    // Verifica metadata
+    const metadata = payment?.metadata || {};
     const rawEmail = metadata.userEmail || metadata.user_email || metadata.email;
-console.log('Payment metadata:', metadata); // Agrega esto antes de la validación
-console.log('Raw email:', rawEmail); // Verifica qué valor está obteniendo
-if (
-  !rawEmail ||
-  typeof rawEmail !== 'string' ||
-  rawEmail.trim() === ''
-) {
-  console.error('❌ Metadata incompleta o email inválido:', metadata);
-  res.sendStatus(200);
-  return;
-}
 
-const email = rawEmail.trim();
+    console.log('📦 Metadata:', metadata);
+    console.log('✉️ Raw email extraído:', rawEmail);
 
+    if (
+      !rawEmail ||
+      typeof rawEmail !== 'string' ||
+      rawEmail.trim() === ''
+    ) {
+      console.error('❌ Metadata incompleta o email inválido:', metadata);
+       res.sendStatus(200);
+       return; // No intentamos reenviar desde Mercado Pago
+    }
+
+    const email = rawEmail.trim();
     const plan = metadata.plan ?? 'desconocido';
 
+    // Guardamos en Firestore
     await db.collection('usuarios').doc(email).set({
       email,
       plan,
@@ -115,15 +121,16 @@ const email = rawEmail.trim();
       timestamp: new Date(),
     });
 
-       console.log('✅ Usuario guardado en Firestore:', email);
-    res.sendStatus(200);
+    console.log('✅ Usuario guardado en Firestore:', email);
+     res.sendStatus(200);
+     return;
   } catch (error) {
-    console.error('❌ Error en webhook:', error);
-    // 🔒 Aseguramos que solo se mande una respuesta
+    console.error('❌ Error procesando el webhook:', error);
     if (!res.headersSent) {
       res.sendStatus(500);
     }
   }
 });
+
 
 export default router;
