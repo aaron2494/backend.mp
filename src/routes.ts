@@ -95,15 +95,18 @@ router.post('/webhook', express.json(), async (req, res) => {
 
     // Verifica metadata
     const metadata = payment?.metadata || {};
-    const rawEmail = metadata.userEmail || metadata.user_email || metadata.email;
+   const rawEmail: string = String(
+  metadata.userEmail || metadata.user_email || metadata.email || ''
+).trim();
+
 
     console.log('📦 Metadata:', metadata);
-    console.log('✉️ Raw email extraído:', rawEmail);
+    console.log('📧 typeof rawEmail:', typeof rawEmail);
+    console.log('📧 rawEmail === "":', rawEmail === '');
+    console.log('📧 rawEmail.trim:', rawEmail?.trim?.());
 
-    if (
-      !rawEmail ||
-      typeof rawEmail !== 'string' ||
-      rawEmail.trim() === ''
+    if (  
+      !rawEmail 
     ) {
       console.error('❌ Metadata incompleta o email inválido:', metadata);
        res.sendStatus(200);

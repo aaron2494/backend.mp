@@ -61,6 +61,7 @@ router.post('/create-preference', async (req, res) => {
 });
 // 📩 Webhook de confirmación de pago
 router.post('/webhook', express.json(), async (req, res) => {
+    console.log('🔔 Webhook recibido. Body:', req.body);
     try {
         const paymentId = req.body?.data?.id;
         if (!paymentId) {
@@ -68,24 +69,30 @@ router.post('/webhook', express.json(), async (req, res) => {
             res.sendStatus(400);
             return;
         }
+        // Inicializa cliente de Mercado Pago y busca el pago
         const paymentClient = new Payment(mp);
-        const payment = await paymentClient.get({ id: paymentId });
-        if (!payment) {
-            console.error('❌ No se pudo obtener el pago desde la API de MP');
+        const paymentResponse = await paymentClient.get({ id: paymentId });
+        if (!paymentResponse) {
+            console.error('❌ No se pudo obtener el pago desde la API de Mercado Pago');
             res.sendStatus(404);
             return;
         }
-        const metadata = payment?.metadata;
-        if (!metadata ||
-            !metadata.userEmail ||
-            typeof metadata.userEmail !== 'string' ||
-            metadata.userEmail.trim() === '') {
+        const payment = paymentResponse.body || paymentResponse;
+        // Verifica metadata
+        const metadata = payment?.metadata || {};
+        const rawEmail = String(metadata.userEmail || metadata.user_email || metadata.email || '').trim();
+        console.log('📦 Metadata:', metadata);
+        console.log('📧 typeof rawEmail:', typeof rawEmail);
+        console.log('📧 rawEmail === "":', rawEmail === '');
+        console.log('📧 rawEmail.trim:', rawEmail?.trim?.());
+        if (!rawEmail) {
             console.error('❌ Metadata incompleta o email inválido:', metadata);
-            res.sendStatus(200); // Respondé 200 para evitar retries infinitos
-            return;
+            res.sendStatus(200);
+            return; // No intentamos reenviar desde Mercado Pago
         }
-        const email = metadata.userEmail.trim();
+        const email = rawEmail.trim();
         const plan = metadata.plan ?? 'desconocido';
+        // Guardamos en Firestore
         await db.collection('usuarios').doc(email).set({
             email,
             plan,
@@ -94,10 +101,10 @@ router.post('/webhook', express.json(), async (req, res) => {
         });
         console.log('✅ Usuario guardado en Firestore:', email);
         res.sendStatus(200);
+        return;
     }
     catch (error) {
-        console.error('❌ Error en webhook:', error);
-        // 🔒 Aseguramos que solo se mande una respuesta
+        console.error('❌ Error procesando el webhook:', error);
         if (!res.headersSent) {
             res.sendStatus(500);
         }
