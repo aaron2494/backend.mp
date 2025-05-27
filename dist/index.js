@@ -6,7 +6,7 @@ import routes from './routes.js';
 dotenv.config();
 const app = express();
 const allowedOrigins = ['https://innovatexx.netlify.app'];
-app.use(cors({
+const corsOptions = {
     origin: (origin, callback) => {
         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
@@ -16,7 +16,9 @@ app.use(cors({
         }
     },
     credentials: true,
-}));
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Maneja preflight global
 app.use(express.json());
 app.use('/api', routes);
 const PORT = process.env.PORT || 3000;
