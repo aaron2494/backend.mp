@@ -1,21 +1,12 @@
 import express from 'express';
 import mp from './mercadoPago.js'; // instancia de MercadoPagoConfig
-import admin from 'firebase-admin';
-import { cert, ServiceAccount } from 'firebase-admin/app';
-import serviceAccount from '../firebase-service-account.json' with { type: 'json' };
-import { getFirestore } from 'firebase-admin/firestore';
+import { db } from './firebase.js'; 
 import { Preference } from 'mercadopago/dist/clients/preference/index.js';
 import { Payment } from 'mercadopago/dist/clients/payment/index.js';
 
 const router = express.Router();
 
-// 🔐 Inicializa Firebase solo si no está ya inicializado
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: cert(serviceAccount as ServiceAccount),
-  });
-}
-const db = getFirestore();
+
 
 // 🎯 Crear preferencia de pago
 router.post('/create-preference', async (req, res) => {

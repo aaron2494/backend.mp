@@ -1,6 +1,11 @@
 import admin from 'firebase-admin';
-import { getFirestore } from 'firebase-admin/firestore';
-admin.initializeApp({
-    credential: admin.credential.cert('../firebase-service-account.json')
-});
-export const db = getFirestore();
+import path from 'path';
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+if (!admin.apps.length) {
+    admin.initializeApp({
+        credential: admin.credential.cert(path.resolve(__dirname, '../firebase-service-account.json'))
+    });
+}
+export const db = admin.firestore();
