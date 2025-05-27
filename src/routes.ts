@@ -108,7 +108,11 @@ router.post('/webhook', express.json(), async (req, res) => {
     const plan = metadata.plan ?? 'desconocido';
 
     // Guardamos en Firestore
-    await db.collection('usuarios').doc(email).set({
+     console.log('🔧 Intentando guardar en Firestore...');
+    console.log('📝 Datos a guardar:', { email, plan, paid: true });
+    
+    const docRef = db.collection('usuarios').doc(email);
+    await docRef.set({
       email,
       plan,
       paid: true,
@@ -116,15 +120,19 @@ router.post('/webhook', express.json(), async (req, res) => {
     });
 
     console.log('✅ Usuario guardado en Firestore:', email);
-     res.sendStatus(200);
-     return;
-  } catch (error) {
-    console.error('❌ Error procesando el webhook:', error);
+    res.sendStatus(200);
+    
+  } catch (error:any) {
+    console.error('❌ Error detallado:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      stack: error.stack
+    });
+    
     if (!res.headersSent) {
       res.sendStatus(500);
     }
   }
 });
-
-
 export default router;

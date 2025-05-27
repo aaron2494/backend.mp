@@ -1,17 +1,20 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
+// Validar variables
+const { FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY } = process.env;
+
+if (!FIREBASE_PROJECT_ID || !FIREBASE_CLIENT_EMAIL || !FIREBASE_PRIVATE_KEY) {
+  throw new Error('❌ Faltan variables de entorno necesarias para Firebase.');
+}
+
 const firebaseConfig = {
-  type: process.env.FIREBASE_TYPE,
-  projectId: process.env.FIREBASE_PROJECT_ID,
-  privateKeyId: process.env.FIREBASE_PRIVATE_KEY_ID,
-  privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-  clientId: process.env.FIREBASE_CLIENT_ID,
-  authUri: process.env.FIREBASE_AUTH_URI,
-  tokenUri: process.env.FIREBASE_TOKEN_URI,
-  authProviderX509CertUrl: process.env.FIREBASE_AUTH_PROVIDER_CERT_URL,
-  clientX509CertUrl: process.env.FIREBASE_CLIENT_CERT_URL
+  projectId: FIREBASE_PROJECT_ID,
+  privateKey: FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+  clientEmail: FIREBASE_CLIENT_EMAIL,
 };
 
 const app = initializeApp({
