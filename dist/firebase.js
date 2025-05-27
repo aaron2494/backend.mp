@@ -1,22 +1,14 @@
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import serviceAccount from '../config/firebase-service-account.json' with { type: 'json' };
-const firebaseConfig = {
-    projectId: serviceAccount.project_id,
-    clientEmail: serviceAccount.client_email,
-    privateKey: serviceAccount.private_key.replace(/\\n/g, '\n')
+import 'dotenv/config';
+const serviceAccount = {
+    project_id: process.env.FIREBASE_PROJECT_ID,
+    private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    client_email: process.env.FIREBASE_CLIENT_EMAIL,
 };
-let db;
-try {
-    const app = initializeApp({
-        credential: cert(firebaseConfig),
-        databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
-    });
-    db = getFirestore(app);
-    console.log('✅ Firebase inicializado correctamente');
-}
-catch (error) {
-    console.error('❌ Error al inicializar Firebase:', error);
-    throw error;
-}
+const app = initializeApp({
+    credential: cert(serviceAccount),
+});
+const db = getFirestore(app);
 export { db };
