@@ -58,13 +58,14 @@ router.post('/webhook', express.json(), async (req, res) => {
       res.sendStatus(400);
     }
 
-    const paymentClient = new Payment(mp);
+     const paymentClient = new Payment(mp);
     const payment = await paymentClient.get({ id: paymentId });
 
-    const metadata = payment?.metadata;
+    const metadata = payment.metadata;
 
-    if (!metadata) {
-      res.sendStatus(400);
+    if (!metadata || !metadata.userEmail) {
+      console.error('Metadata no encontrada');
+        res.sendStatus(400);
     }
 
     await db.collection('usuarios').doc(metadata.userEmail).set({
@@ -74,15 +75,12 @@ router.post('/webhook', express.json(), async (req, res) => {
       timestamp: new Date(),
     });
 
+    console.log('Usuario guardado en Firestore:', metadata.userEmail);
     res.sendStatus(200);
   } catch (error) {
     console.error('Error en webhook', error);
     res.sendStatus(500);
   }
 });
-
-
-
-
 
 export default router;
