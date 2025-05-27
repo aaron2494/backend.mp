@@ -90,18 +90,20 @@ router.post('/webhook', express.json(), async (req, res) => {
 
     const metadata = payment?.metadata;
 
-    if (
-      !metadata ||
-      !metadata.userEmail ||
-      typeof metadata.userEmail !== 'string' ||
-      metadata.userEmail.trim() === ''
-    ) {
-      console.error('❌ Metadata incompleta o email inválido:', metadata);
-       res.sendStatus(200); // Respondé 200 para evitar retries infinitos
-      return;
-      }
+    const rawEmail = metadata.userEmail || metadata.user_email;
 
-    const email = metadata.userEmail.trim();
+if (
+  !rawEmail ||
+  typeof rawEmail !== 'string' ||
+  rawEmail.trim() === ''
+) {
+  console.error('❌ Metadata incompleta o email inválido:', metadata);
+  res.sendStatus(200);
+  return;
+}
+
+const email = rawEmail.trim();
+
     const plan = metadata.plan ?? 'desconocido';
 
     await db.collection('usuarios').doc(email).set({
