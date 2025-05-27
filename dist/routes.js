@@ -48,24 +48,30 @@ router.post('/webhook', express.json(), async (req, res) => {
     try {
         const paymentId = req.body?.data?.id;
         if (!paymentId) {
+            console.error('❌ paymentId ausente en el webhook');
             res.sendStatus(400);
         }
         const paymentClient = new Payment(mp);
         const payment = await paymentClient.get({ id: paymentId });
+        console.log('✅ Pago recibido:', payment);
         const metadata = payment?.metadata;
-        if (!metadata) {
+        if (!metadata || !metadata.userEmail || typeof metadata.userEmail !== 'string' || metadata.userEmail.trim() === '') {
+            console.error('❌ Metadata incompleta o email vacío:', metadata);
             res.sendStatus(400);
         }
-        await db.collection('usuarios').doc(metadata.userEmail).set({
-            email: metadata.userEmail,
-            plan: metadata.plan,
+        const email = metadata.userEmail.trim();
+        const plan = metadata.plan ?? 'desconocido';
+        await db.collection('usuarios').doc(email).set({
+            email,
+            plan,
             paid: true,
             timestamp: new Date(),
         });
+        console.log('✅ Usuario guardado en Firestore:', email);
         res.sendStatus(200);
     }
     catch (error) {
-        console.error('Error en webhook', error);
+        console.error('❌ Error en webhook:', error);
         res.sendStatus(500);
     }
 });
