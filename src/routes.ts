@@ -31,8 +31,8 @@ router.post('/create-preference', async (req, res) => {
           },
         ],
         back_urls: {
-          success: `${process.env.FRONTEND_URL}/planes?plan=${plan}`,
-          failure: `${process.env.FRONTEND_URL}/planes`,
+          success: `${process.env.FRONTEND_URL}/plan-${plan}`,
+          failure: `${process.env.FRONTEND_URL}`,
         },
         auto_return: 'approved',
         metadata: {
@@ -48,12 +48,24 @@ router.post('/create-preference', async (req, res) => {
     res.status(500).json({ error: 'No se pudo crear la preferencia' });
   }
 });
+import { Payment } from 'mercadopago/dist/clients/payment/index.js';
+
 router.post('/webhook', express.json(), async (req, res) => {
   try {
-    const payment = req.body;
-    const metadata = payment.data?.metadata;
+    const paymentId = req.body?.data?.id;
 
-    if (!metadata) res.sendStatus(400);;
+    if (!paymentId) {
+      res.sendStatus(400);
+    }
+
+    const paymentClient = new Payment(mp);
+    const payment = await paymentClient.get({ id: paymentId });
+
+    const metadata = payment?.metadata;
+
+    if (!metadata) {
+      res.sendStatus(400);
+    }
 
     await db.collection('usuarios').doc(metadata.userEmail).set({
       email: metadata.userEmail,
@@ -68,6 +80,8 @@ router.post('/webhook', express.json(), async (req, res) => {
     res.sendStatus(500);
   }
 });
+
+
 
 
 
