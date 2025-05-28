@@ -1,17 +1,23 @@
 import { initializeApp, cert, ServiceAccount } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import 'dotenv/config';
+import { readFileSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const serviceAccount = {
-  project_id: process.env.FIREBASE_PROJECT_ID,
-  private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-  private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  client_email: process.env.FIREBASE_CLIENT_EMAIL,
-} as ServiceAccount;
+// Obtener __dirname en ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Ruta donde Render coloca los secret files
+const serviceAccountPath = process.env.NODE_ENV === 'production'
+  ? '/etc/secrets/firebase-service-account.json'
+  : path.join(__dirname, '../config/firebase-service-account.json');
+
+const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
 
 const app = initializeApp({
-  credential: cert(serviceAccount),
+  credential: cert(serviceAccount as ServiceAccount),
+  databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
 });
 
-const db = getFirestore(app);
-export { db };
+export const db = getFirestore(app);
