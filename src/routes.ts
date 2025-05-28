@@ -135,4 +135,35 @@ router.post('/webhook', express.json(), async (req, res) => {
     }
   }
 });
+// 🔐 Verificar estado de suscripción del usuario
+router.get('/user-plan-status', async (req, res) => {
+  const userEmail = req.query.email as string;
+
+  if (!userEmail || userEmail.trim() === '') {
+     res.status(400).json({ error: 'Falta el email del usuario' });
+     return
+  }
+
+  try {
+    const docRef = db.collection('usuarios').doc(userEmail.trim());
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+       res.status(200).json({ active: false, plan: null });
+       return
+    }
+
+    const data = doc.data();
+
+     res.status(200).json({
+      active: !!data?.paid,
+      plan: data?.plan || null,
+    });
+    return
+  } catch (error: any) {
+    console.error('❌ Error al verificar el plan del usuario:', error);
+    res.status(500).json({ error: 'Error interno al verificar plan' });
+  }
+});
+
 export default router;
