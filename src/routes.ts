@@ -118,8 +118,16 @@ router.post('/webhook', express.json(), async (req, res) => {
       paid: true,
       timestamp: new Date(),
     });
+    await db.collection('ventas').add({
+  email,
+  plan,
+  monto: payment.transaction_amount || 0,
+  metodoPago: payment.payment_method_id || 'desconocido',
+  estado: payment.status || 'desconocido',
+  timestamp: new Date(),
+});
 
-    console.log('✅ Usuario guardado en Firestore:', email);
+console.log('✅ Usuario y venta guardados');
     res.sendStatus(200);
     
   } catch (error:any) {
