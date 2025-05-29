@@ -133,4 +133,25 @@ router.get('/user-plan-status', async (req, res) => {
         res.status(500).json({ error: 'Error interno al verificar plan' });
     }
 });
+router.get('/ventas', async (req, res) => {
+    try {
+        const ventasSnapshot = await db.collection('ventas').orderBy('timestamp', 'desc').get();
+        const ventas = ventasSnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                plan: data.plan,
+                monto: data.monto,
+                fecha: data.timestamp ? data.timestamp.toDate().toISOString() : null,
+                userEmail: data.email || null,
+                // otros campos que quieras enviar al front
+            };
+        });
+        res.status(200).json(ventas);
+    }
+    catch (error) {
+        console.error('❌ Error al obtener ventas:', error);
+        res.status(500).json({ error: 'Error interno al obtener ventas' });
+    }
+});
 export default router;
